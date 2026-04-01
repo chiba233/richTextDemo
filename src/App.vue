@@ -61,9 +61,15 @@ const translations = {
 
 参数里的转义只对语法符号生效，比如 $$italic(字面 \\(括号\\) \\| 分隔符)$$。
 
+嵌套 inline 也可以工作，比如 $$bold(外层里还有 $$italic(italic)$$ 和 $$ruby(漢字 | かんじ)$$)$$。
+
 $$warn(注意 | beta | ui)*
 这不是“自动识别全部标签”。
 只有页面初始化时声明过的 handler，才会被渲染成对应效果。
+*end$$
+
+$$warn($$italic(可嵌套标题)$$ | $$italic(beta)$$ | $$bold(ui)$$)*
+块级内容里也可以继续放 $$bold(inline)$$、$$italic(嵌套)$$ 和 $$link(https://github.com/chiba233/yumeDSL | link)$$。
 *end$$
 
 $$code(js | raw demo)%
@@ -115,9 +121,15 @@ Disable one of the declarations on the left and watch how the rendering degrades
 
 Escapes only apply to syntax tokens, for example $$italic(literal \\(paren\\) \\| divider)$$.
 
+Nested inline tags also work, for example $$bold(outer with $$italic(italic)$$ and $$ruby(漢字 | kanji)$$ inside)$$.
+
 $$warn(Notice | beta | ui)*
 This does not auto-detect every tag.
 Only handlers declared up front are rendered into custom output.
+*end$$
+
+$$warn($$italic(Nested title)$$ | $$italic(beta)$$ | $$bold(ui)$$)*
+Block content can still contain $$bold(inline)$$, $$italic(nested)$$, and $$link(https://github.com/chiba233/yumeDSL | link)$$.
 *end$$
 
 $$code(js | raw demo)%
@@ -169,9 +181,15 @@ console.log(message);
 
 エスケープは構文トークンにだけ効きます。たとえば $$italic(文字どおりの \\(括弧\\) \\| 区切り)$$ のように書けます。
 
+inline の入れ子も可能で、たとえば $$bold(外側の中に $$italic(italic)$$ と $$ruby(漢字 | かんじ)$$ を入れられます)$$。
+
 $$warn(注意 | beta | ui)*
 これは「すべてのタグを自動認識」する仕組みではありません。
 事前に宣言した handler だけが対応する表示へ変換されます。
+*end$$
+
+$$warn($$italic(入れ子タイトル)$$ | $$italic(beta)$$ | $$bold(ui)$$)*
+block 内容の中でも $$bold(inline)$$、$$italic(入れ子)$$、$$link(https://github.com/chiba233/yumeDSL | link)$$ を使えます。
 *end$$
 
 $$code(js | raw demo)%
@@ -216,10 +234,13 @@ const escapeHtml = (value) =>
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#39;");
 
+const renderText = (value) => escapeHtml(String(value)).replaceAll("\n", "<br />");
+const trimTrailingBreak = (html) => html.replace(/(?:<br \/>)+$/, "");
+
 const renderTokens = (tokens) =>
   tokens
     .map((token) => {
-      if (token.type === "text") return escapeHtml(String(token.value));
+      if (token.type === "text") return renderText(token.value);
       if (token.type === "bold") return `<strong>${renderTokens(token.value)}</strong>`;
       if (token.type === "italic") return `<em>${renderTokens(token.value)}</em>`;
 
@@ -233,19 +254,24 @@ const renderTokens = (tokens) =>
       }
 
       if (token.type === "warn") {
-        const meta = Array.isArray(token.meta)
-          ? token.meta
-              .filter((item) => typeof item === "string" && item)
-              .map((item) => `<span class="demo-warn-meta-chip">${escapeHtml(item)}</span>`)
+        const title =
+          Array.isArray(token.titleTokens) && token.titleTokens.length > 0
+            ? renderTokens(token.titleTokens)
+            : escapeHtml(String(token.title ?? "Notice"));
+        const meta = Array.isArray(token.metaTokens)
+          ? token.metaTokens
+              .filter((item) => Array.isArray(item) && item.length > 0)
+              .map((item) => `<span class="demo-warn-meta-chip">${renderTokens(item)}</span>`)
               .join("")
           : "";
+        const body = trimTrailingBreak(renderTokens(token.value));
         return [
           `<section class="demo-warn">`,
           `<div class="demo-warn-head">`,
-          `<div class="demo-warn-title">${escapeHtml(String(token.title ?? "Notice"))}</div>`,
+          `<div class="demo-warn-title">${title}</div>`,
           meta ? `<div class="demo-warn-meta">${meta}</div>` : "",
           `</div>`,
-          `<div class="demo-warn-body">${renderTokens(token.value)}</div>`,
+          `<div class="demo-warn-body">${body}</div>`,
           `</section>`,
         ].join("");
       }
@@ -308,13 +334,19 @@ const activeHandlers = computed(() => {
       inline: (args) => ({
         type: "warn",
         title: args.text(0) || "Notice",
-        meta: [args.text(1), args.text(2)].filter(Boolean),
+        titleTokens: args.materializedTokens(0),
+        metaTokens: [args.materializedTokens(1), args.materializedTokens(2)].filter(
+          (item) => item.length > 0,
+        ),
         value: args.materializedTailTokens(3),
       }),
       block: (args, content) => ({
         type: "warn",
         title: args.text(0) || "Notice",
-        meta: [args.text(1), args.text(2)].filter(Boolean),
+        titleTokens: args.materializedTokens(0),
+        metaTokens: [args.materializedTokens(1), args.materializedTokens(2)].filter(
+          (item) => item.length > 0,
+        ),
         value: content,
       }),
     };
