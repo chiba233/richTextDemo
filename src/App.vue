@@ -11,7 +11,6 @@ import { Decoration, EditorView, keymap, ViewPlugin } from "@codemirror/view";
 import { basicSetup } from "codemirror";
 import {
   buildPositionTracker,
-  createEasyStableId,
   createParser,
   createPipeHandlers,
   createSimpleInlineHandlers,
@@ -991,116 +990,198 @@ const composedState = ref({
 });
 const hiddenSegments = ref(new Set());
 
+const BLOCK_NODE = new Set(["raw", "block"]);
+
 const getDiffRange = (previousText, nextText) => {
   if (previousText === nextText) {
-    return { changed: false, start: 0, newEnd: 0 };
+    return { changed: false, start: 0, oldEnd: 0, newEnd: 0 };
   }
-
   let start = 0;
   const minLength = Math.min(previousText.length, nextText.length);
   while (start < minLength && previousText[start] === nextText[start]) start++;
-
   let oldEnd = previousText.length;
   let newEnd = nextText.length;
   while (oldEnd > start && newEnd > start && previousText[oldEnd - 1] === nextText[newEnd - 1]) {
     oldEnd--;
     newEnd--;
   }
+  return { changed: true, start, oldEnd, newEnd };
+};
 
-  return { changed: true, start, newEnd };
+// Build chunks from a slice of the structural tree.
+// Each chunk: { key, html, srcFrom, srcTo }
+const buildChunks = (tree, from, to, text, tracker, cache) => {
+  const chunks = [];
+  let inlineBuf = "";
+  let inlineSrcFrom = -1;
+  let inlineSrcTo = -1;
+  let reused = 0;
+
+  const flushInline = () => {
+    if (!inlineBuf) return;
+    chunks.push({
+      key: `i-${inlineSrcFrom}-${inlineSrcTo}`,
+      html: inlineBuf,
+      srcFrom: inlineSrcFrom,
+      srcTo: inlineSrcTo,
+    });
+    inlineBuf = "";
+    inlineSrcFrom = -1;
+  };
+
+  for (let idx = from; idx < to; idx++) {
+    const node = tree[idx];
+    const position = node.position;
+    if (!position) continue;
+
+    if (node.type === "text" && idx > 0 && BLOCK_NODE.has(tree[idx - 1].type)) {
+      const trimmed = node.value.replace(/^\r?\n/, "");
+      if (trimmed === "") continue;
+      const segHtml = renderTokens([{ ...node, value: trimmed }]);
+      cache.set(`text::${trimmed}`, segHtml);
+      if (inlineSrcFrom < 0) inlineSrcFrom = position.start.offset;
+      inlineSrcTo = position.end.offset;
+      inlineBuf += segHtml;
+      continue;
+    }
+
+    const slice = text.slice(position.start.offset, position.end.offset);
+    const cacheKey = `${node.type}:${node.tag ?? ""}:${slice}`;
+
+    let segHtml = cache.get(cacheKey);
+    if (segHtml != null) {
+      reused++;
+    } else {
+      const tokens = parseSlice(text, position, parser.value, tracker);
+      segHtml = renderTokens(tokens);
+      cache.set(cacheKey, segHtml);
+    }
+
+    if (BLOCK_NODE.has(node.type)) {
+      flushInline();
+      chunks.push({
+        key: `b-${position.start.offset}-${position.end.offset}`,
+        html: segHtml,
+        srcFrom: position.start.offset,
+        srcTo: position.end.offset,
+      });
+    } else {
+      if (inlineSrcFrom < 0) inlineSrcFrom = position.start.offset;
+      inlineSrcTo = position.end.offset;
+      inlineBuf += segHtml;
+    }
+  }
+  flushInline();
+  return { chunks, reused };
 };
 
 watch(
   [source, enabledTags],
   () => {
     const registrySignature = enabledTags.value.join("|");
-    if (registrySignature !== previousRegistrySignature.value) {
+    const registryChanged = registrySignature !== previousRegistrySignature.value;
+    if (registryChanged) {
       previousSegmentCache.value = new Map();
       previousSource.value = "";
       previousRegistrySignature.value = registrySignature;
     }
 
     const started = performance.now();
-    const tracker = buildPositionTracker(source.value);
-    const diff = getDiffRange(previousSource.value, source.value);
-    const nextCache = new Map();
-    let reusedCount = 0;
-
-    const BLOCK_NODE = new Set(["raw", "block"]);
+    const text = source.value;
     const tree = structuralState.value.tree;
+    const prevChunks = composedState.value.segments;
 
-    const chunks = [];
-    const stableId = createEasyStableId({ prefix: "seg" });
-    let inlineBuf = "";
-    let inlineKeyBuf = "";
+    // ── Full rebuild (first run / registry change) ──
+    if (registryChanged || prevChunks.length === 0) {
+      const tracker = buildPositionTracker(text);
+      const cache = new Map();
+      const { chunks, reused } = buildChunks(tree, 0, tree.length, text, tracker, cache);
+      composedState.value = {
+        html: chunks.map((c) => c.html).join(""),
+        segments: chunks,
+        composeMs: performance.now() - started,
+        reusedCount: reused,
+      };
+      hiddenSegments.value = new Set();
+      previousSegmentCache.value = cache;
+      previousSource.value = text;
+      return;
+    }
 
-    const flushInline = () => {
-      if (!inlineBuf) return;
-      const key = stableId({ type: "inline", value: inlineKeyBuf });
-      chunks.push({ key, html: inlineBuf });
-      inlineBuf = "";
-      inlineKeyBuf = "";
-    };
+    // ── Incremental update ──
+    const diff = getDiffRange(previousSource.value, text);
+    if (!diff.changed) return;
 
-    for (let idx = 0; idx < tree.length; idx++) {
-      const node = tree[idx];
-      const position = node.position;
-      if (!position) continue;
+    const delta = text.length - previousSource.value.length;
 
-      // Workaround: parseSlice cannot consume the trailing \n after
-      // a block/raw closer because it only sees its own slice.
-      // Strip one leading \n from text nodes that follow a block/raw node.
-      if (node.type === "text" && idx > 0 && BLOCK_NODE.has(tree[idx - 1].type)) {
-        const trimmed = node.value.replace(/^\r?\n/, "");
-        if (trimmed === "") continue;
-        const segHtml = renderTokens([{ ...node, value: trimmed }]);
-        const cacheKey = `text::${trimmed}`;
-        nextCache.set(cacheKey, segHtml);
-        inlineBuf += segHtml;
-        inlineKeyBuf += trimmed;
-        continue;
-      }
-
-      const slice = source.value.slice(position.start.offset, position.end.offset);
-      const cacheKey = `${node.type}:${node.tag ?? ""}:${slice}`;
-      const overlapsDiff =
-        diff.changed && position.end.offset > diff.start && position.start.offset < diff.newEnd;
-      const matchesTarget =
-        sliceState.value.node?.position &&
-        position.start.offset === sliceState.value.node.position.start.offset &&
-        position.end.offset === sliceState.value.node.position.end.offset;
-
-      let segHtml;
-      if (!overlapsDiff && !matchesTarget && previousSegmentCache.value.has(cacheKey)) {
-        reusedCount++;
-        segHtml = previousSegmentCache.value.get(cacheKey);
-      } else {
-        const segmentTokens = parseSlice(source.value, position, parser.value, tracker);
-        segHtml = renderTokens(segmentTokens);
-      }
-      nextCache.set(cacheKey, segHtml);
-
-      // Block/raw nodes become their own chunk; inline/text nodes accumulate
-      if (BLOCK_NODE.has(node.type)) {
-        flushInline();
-        const key = stableId({ type: node.type, value: slice });
-        chunks.push({ key, html: segHtml });
-      } else {
-        inlineBuf += segHtml;
-        inlineKeyBuf += slice;
+    // Split previous chunks into before / affected / after
+    let firstAffected = prevChunks.length;
+    let lastAffected = -1;
+    for (let i = 0; i < prevChunks.length; i++) {
+      const c = prevChunks[i];
+      if (c.srcTo > diff.start && c.srcFrom < diff.oldEnd) {
+        if (firstAffected > i) firstAffected = i;
+        lastAffected = i;
       }
     }
-    flushInline();
+    // If diff falls in a gap between chunks, widen to the surrounding chunks
+    if (lastAffected < 0) {
+      for (let i = 0; i < prevChunks.length; i++) {
+        if (prevChunks[i].srcFrom >= diff.start) {
+          firstAffected = Math.max(0, i - 1);
+          lastAffected = i;
+          break;
+        }
+      }
+      if (lastAffected < 0) {
+        firstAffected = Math.max(0, prevChunks.length - 1);
+        lastAffected = prevChunks.length - 1;
+      }
+    }
 
+    const before = prevChunks.slice(0, firstAffected);
+    const after = prevChunks.slice(lastAffected + 1).map((c) => ({
+      ...c,
+      key: c.key.replace(/-\d+-\d+$/, `-${c.srcFrom + delta}-${c.srcTo + delta}`),
+      srcFrom: c.srcFrom + delta,
+      srcTo: c.srcTo + delta,
+    }));
+
+    // Find tree node range that covers the affected source region
+    const rebuildFrom = before.length > 0 ? before[before.length - 1].srcTo : 0;
+    const rebuildTo = after.length > 0 ? after[0].srcFrom : text.length;
+    let treeFrom = 0;
+    let treeTo = tree.length;
+    for (let i = 0; i < tree.length; i++) {
+      const pos = tree[i].position;
+      if (pos && pos.end.offset > rebuildFrom) {
+        treeFrom = i;
+        break;
+      }
+    }
+    for (let i = tree.length - 1; i >= treeFrom; i--) {
+      const pos = tree[i].position;
+      if (pos && pos.start.offset < rebuildTo) {
+        treeTo = i + 1;
+        break;
+      }
+    }
+
+    // Rebuild only the affected slice; reuse the segment cache
+    const tracker = buildPositionTracker(text);
+    const cache = previousSegmentCache.value;
+    const { chunks: middle, reused } = buildChunks(tree, treeFrom, treeTo, text, tracker, cache);
+
+    const chunks = [...before, ...middle, ...after];
     composedState.value = {
-      html: chunks.map((s) => s.html).join(""),
+      html: chunks.map((c) => c.html).join(""),
       segments: chunks,
       composeMs: performance.now() - started,
-      reusedCount,
+      reusedCount: reused + before.length + after.length,
     };
     hiddenSegments.value = new Set();
-    previousSegmentCache.value = nextCache;
-    previousSource.value = source.value;
+    previousSegmentCache.value = cache;
+    previousSource.value = text;
   },
   { immediate: true, deep: true },
 );
