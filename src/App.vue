@@ -1,7 +1,13 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { EditorState, RangeSetBuilder } from "@codemirror/state";
-import { Decoration, EditorView, ViewPlugin } from "@codemirror/view";
+import {
+  autocompletion,
+  closeCompletion,
+  snippetCompletion,
+  startCompletion,
+} from "@codemirror/autocomplete";
+import { EditorState, Prec, RangeSetBuilder } from "@codemirror/state";
+import { Decoration, EditorView, ViewPlugin, keymap } from "@codemirror/view";
 import { basicSetup } from "codemirror";
 import {
   buildPositionTracker,
@@ -31,6 +37,8 @@ const translations = {
     sourceTitle: "用户输入",
     previewEyebrow: "Preview",
     previewTitle: "结果",
+    deepSample: "100 层嵌套",
+    deepSampleHint: "生成超深嵌套，观察默认深度限制下的降级行为。",
     declared: "已声明",
     caret: "光标 offset",
     hit: "命中",
@@ -88,6 +96,8 @@ console.log(message);
     sourceTitle: "Input",
     previewEyebrow: "Preview",
     previewTitle: "Result",
+    deepSample: "100-level Nest",
+    deepSampleHint: "Generate very deep nesting to observe fallback under the default depth limit.",
     declared: "Declared",
     caret: "Caret offset",
     hit: "Hit",
@@ -148,6 +158,8 @@ console.log(message);
     sourceTitle: "入力",
     previewEyebrow: "Preview",
     previewTitle: "結果",
+    deepSample: "100層ネスト",
+    deepSampleHint: "超深いネストを生成して、デフォルト深度制限での降格動作を確認します。",
     declared: "宣言済み",
     caret: "キャレット offset",
     hit: "ヒット",
@@ -219,12 +231,101 @@ watch(currentLang, (lang) => {
   caretOffset.value = 0;
 });
 
+const createDeepNestedSample = (lang) => {
+  const leafByLang = {
+    zh: "depth-limit demo",
+    en: "depth-limit demo",
+    ja: "depth-limit demo",
+  };
+  let value = leafByLang[lang] ?? leafByLang.en;
+  for (let i = 100; i >= 1; i--) {
+    value = `$$bold(L${i}: ${value})$$`;
+  }
+  return value;
+};
+
+const loadDeepNestedSample = () => {
+  source.value = createDeepNestedSample(currentLang.value);
+  caretOffset.value = source.value.length;
+};
+
 const registryOptions = computed(() =>
   registryBase.map((item) => ({
     ...item,
     description: copy.value.registryDescriptions[item.key],
   })),
 );
+
+const completionTemplates = {
+  bold: [
+    {
+      label: "bold",
+      detail: "inline",
+      template: "$$bold(${text})$$",
+      insertText: "$$bold()$$",
+      cursorOffset: "$$bold(".length,
+      info: "Insert a simple inline bold tag.",
+    },
+  ],
+  italic: [
+    {
+      label: "italic",
+      detail: "inline",
+      template: "$$italic(${text})$$",
+      insertText: "$$italic()$$",
+      cursorOffset: "$$italic(".length,
+      info: "Insert a simple inline italic tag.",
+    },
+  ],
+  link: [
+    {
+      label: "link",
+      detail: "inline",
+      template: "$$link(${https://example.com} | ${label})$$",
+      insertText: "$$link(https://example.com | label)$$",
+      cursorOffset: "$$link(".length,
+      info: "Insert a link tag with URL and label.",
+    },
+  ],
+  ruby: [
+    {
+      label: "ruby",
+      detail: "inline",
+      template: "$$ruby(${漢字} | ${かんじ})$$",
+      insertText: "$$ruby(漢字 | かんじ)$$",
+      cursorOffset: "$$ruby(".length,
+      info: "Insert ruby base text and reading.",
+    },
+  ],
+  warn: [
+    {
+      label: "warn",
+      detail: "inline",
+      template: "$$warn(${title} | ${meta1} | ${meta2})$$",
+      insertText: "$$warn(title | meta1 | meta2)$$",
+      cursorOffset: "$$warn(".length,
+      info: "Insert an inline warn tag with extra metadata slots.",
+    },
+    {
+      label: "warn block",
+      detail: "block",
+      template: "$$warn(${title} | ${meta1} | ${meta2})*\n${content}\n*end$$",
+      insertText: "$$warn(title | meta1 | meta2)*\ncontent\n*end$$",
+      cursorOffset: "$$warn(".length,
+      info: "Insert a block warn tag.",
+    },
+  ],
+  code: [
+    {
+      label: "code",
+      detail: "raw",
+      template: "$$code(${lang} | ${title})%\n${content}\n%end$$",
+      insertText: "$$code(lang | title)%\ncontent\n%end$$",
+      cursorOffset: "$$code(".length,
+      info: "Insert a raw code block tag.",
+    },
+  ],
+};
 
 const escapeHtml = (value) =>
   value
@@ -397,6 +498,27 @@ const tokenizer = computed(() =>
   }),
 );
 
+const completionOptions = computed(() =>
+  enabledTags.value.flatMap((tag) =>
+    (completionTemplates[tag] ?? []).map((entry) =>
+      snippetCompletion(entry.template, {
+        label: entry.label,
+        detail: entry.detail,
+        info: entry.info,
+      }),
+    ),
+  ),
+);
+
+const plainCompletionEntries = computed(() =>
+  enabledTags.value.flatMap((tag) =>
+    (completionTemplates[tag] ?? []).map((entry) => ({
+      ...entry,
+      tag,
+    })),
+  ),
+);
+
 const structuralState = computed(() => {
   const started = performance.now();
   const tree = parser.value.structural(source.value, { trackPositions: true });
@@ -446,8 +568,100 @@ const sliceState = computed(() => {
 });
 
 const editorRoot = ref(null);
+const completionPanel = ref(null);
 const panelHeight = ref(860);
+const selectedCompletionIndex = ref(0);
+const completionPanelStyle = ref({});
+const showCompletionPanel = ref(false);
 let editorView = null;
+
+const currentDslCompletion = computed(() => {
+  const head = caretOffset.value;
+  const before = source.value.slice(Math.max(0, head - 64), head);
+  const match = before.match(/\${1,2}([A-Za-z-]*)$/);
+  if (!match) return null;
+
+  const typed = match[1] ?? "";
+  const options = plainCompletionEntries.value.filter((entry) => entry.label.startsWith(typed));
+  if (options.length === 0) return null;
+
+  return {
+    from: head - match[0].length,
+    to: head,
+    typed,
+    options,
+  };
+});
+
+const applyCompletionTemplate = (entry) => {
+  if (!editorView || !currentDslCompletion.value) return;
+  const { from, to } = currentDslCompletion.value;
+  editorView.dispatch({
+    changes: { from, to, insert: entry.insertText },
+    selection: { anchor: from + entry.cursorOffset },
+  });
+  showCompletionPanel.value = false;
+  editorView.focus();
+};
+
+const syncCompletionScroll = () => {
+  queueMicrotask(() => {
+    const active = completionPanel.value?.querySelector(".editor-completion-item-active");
+    active?.scrollIntoView({ block: "nearest" });
+  });
+};
+
+const moveCompletionSelection = (delta) => {
+  if (!currentDslCompletion.value) return false;
+  const { options } = currentDslCompletion.value;
+  selectedCompletionIndex.value =
+    (selectedCompletionIndex.value + delta + options.length) % options.length;
+  syncCompletionScroll();
+  return true;
+};
+
+const applySelectedCompletion = () => {
+  if (!currentDslCompletion.value) return false;
+  const option = currentDslCompletion.value.options[selectedCompletionIndex.value];
+  if (!option) return false;
+  applyCompletionTemplate(option);
+  return true;
+};
+
+const updateCompletionPanelPosition = () => {
+  if (
+    !editorView ||
+    !editorRoot.value ||
+    !currentDslCompletion.value ||
+    !showCompletionPanel.value
+  ) {
+    completionPanelStyle.value = {};
+    return;
+  }
+
+  const caret = editorView.coordsAtPos(editorView.state.selection.main.head);
+  const rootRect = editorRoot.value.getBoundingClientRect();
+  if (!caret) {
+    completionPanelStyle.value = {};
+    return;
+  }
+
+  const panelWidth = Math.min(320, Math.max(220, rootRect.width - 24));
+  const left = Math.min(
+    Math.max(12, caret.left - rootRect.left),
+    Math.max(12, rootRect.width - panelWidth - 12),
+  );
+  const top = Math.min(
+    Math.max(12, caret.bottom - rootRect.top + 8),
+    Math.max(12, rootRect.height - 192),
+  );
+
+  completionPanelStyle.value = {
+    left: `${left}px`,
+    top: `${top}px`,
+    width: `${panelWidth}px`,
+  };
+};
 
 const buildHighlightPlugin = (tokenize) =>
   ViewPlugin.fromClass(
@@ -485,18 +699,140 @@ const buildHighlightPlugin = (tokenize) =>
     { decorations: (value) => value.decorations },
   );
 
+const completeDslTag = (context) => {
+  const before = context.matchBefore(/\${1,2}[A-Za-z-]*/);
+  if (!before) return null;
+  if (!context.explicit && before.from === before.to) return null;
+
+  const typed = before.text.slice(2);
+  const options = completionOptions.value.filter((option) => option.label.startsWith(typed));
+  if (options.length === 0) return null;
+
+  return {
+    from: before.from,
+    options,
+    validFor: /^\${1,2}[A-Za-z-]*$/,
+  };
+};
+
+const shouldTriggerDslCompletion = (view) => {
+  const head = view.state.selection.main.head;
+  const before = view.state.sliceDoc(Math.max(0, head - 64), head);
+  const match = before.match(/\${1,2}([A-Za-z-]*)$/);
+  if (!match) return false;
+  return true;
+};
+
+const queueCompletion = (view) => {
+  queueMicrotask(() => {
+    if (!view.hasFocus) return;
+    if (shouldTriggerDslCompletion(view)) {
+      selectedCompletionIndex.value = 0;
+      showCompletionPanel.value = true;
+      startCompletion(view);
+      updateCompletionPanelPosition();
+    } else {
+      showCompletionPanel.value = false;
+      closeCompletion(view);
+      completionPanelStyle.value = {};
+    }
+  });
+};
+
 const createEditorExtensions = () => [
   basicSetup,
   EditorView.lineWrapping,
+  autocompletion({
+    override: [completeDslTag],
+    activateOnTyping: true,
+    defaultKeymap: true,
+  }),
   buildHighlightPlugin((text) => tokenizer.value.tokenize(text)),
+  Prec.highest(
+    keymap.of([
+      {
+        key: "ArrowDown",
+        run: () => moveCompletionSelection(1),
+      },
+      {
+        key: "ArrowUp",
+        run: () => moveCompletionSelection(-1),
+      },
+      {
+        key: "Enter",
+        run: () => applySelectedCompletion(),
+      },
+      {
+        key: "Tab",
+        run: () => applySelectedCompletion(),
+      },
+      {
+        key: "Escape",
+        run: () => {
+          if (!editorView) return false;
+          showCompletionPanel.value = false;
+          closeCompletion(editorView);
+          completionPanelStyle.value = {};
+          return true;
+        },
+      },
+      ...Array.from({ length: 9 }, (_, index) => ({
+        key: String(index + 1),
+        run: () => {
+          if (!currentDslCompletion.value) return false;
+          selectedCompletionIndex.value = Math.min(
+            index,
+            currentDslCompletion.value.options.length - 1,
+          );
+          syncCompletionScroll();
+          return applySelectedCompletion();
+        },
+      })),
+    ]),
+  ),
+  EditorView.domEventHandlers({
+    keydown: (_eventView, event) => {
+      if (!currentDslCompletion.value) return false;
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        return moveCompletionSelection(1);
+      }
+      if (event.key === "ArrowUp") {
+        event.preventDefault();
+        return moveCompletionSelection(-1);
+      }
+      if (event.key === "Enter" || event.key === "Tab") {
+        event.preventDefault();
+        return applySelectedCompletion();
+      }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeCompletion(editorView);
+        return true;
+      }
+      return false;
+    },
+  }),
   EditorView.updateListener.of((update) => {
     if (update.docChanged) {
       const nextSource = update.state.doc.toString();
       if (nextSource !== source.value) source.value = nextSource;
+      queueCompletion(update.view);
     }
 
     if (update.docChanged || update.selectionSet) {
       caretOffset.value = update.state.selection.main.head;
+      updateCompletionPanelPosition();
+    }
+
+    if (!update.docChanged && update.selectionSet) {
+      showCompletionPanel.value = false;
+      closeCompletion(update.view);
+      completionPanelStyle.value = {};
+    }
+
+    if (update.viewportChanged) {
+      updateCompletionPanelPosition();
     }
   }),
   EditorView.theme({
@@ -553,6 +889,7 @@ const mountEditor = () => {
     parent: editorRoot.value,
   });
   caretOffset.value = editorView.state.selection.main.head;
+  updateCompletionPanelPosition();
 };
 
 const previousSource = ref(source.value);
@@ -739,6 +1076,12 @@ watch([currentLang, source, enabledTags], async () => {
         </header>
         <div class="panel-body source-body">
           <div class="source-meta">
+            <div class="source-tools">
+              <button type="button" class="mini-action" @click="loadDeepNestedSample">
+                {{ copy.deepSample }}
+              </button>
+              <span class="mini-hint">{{ copy.deepSampleHint }}</span>
+            </div>
             <div class="tag-list">
               <span v-for="tag in enabledTags" :key="tag" class="tag-chip">
                 {{ copy.declared }}: {{ tag }}
@@ -751,6 +1094,28 @@ watch([currentLang, source, enabledTags], async () => {
             </div>
           </div>
           <div class="editor-stack">
+            <div
+              v-if="showCompletionPanel && currentDslCompletion"
+              ref="completionPanel"
+              class="editor-completion-panel"
+              :style="completionPanelStyle"
+            >
+              <button
+                v-for="option in currentDslCompletion.options"
+                :key="`${option.label}:${option.detail}`"
+                type="button"
+                class="editor-completion-item"
+                tabindex="-1"
+                :class="{
+                  'editor-completion-item-active':
+                    currentDslCompletion.options[selectedCompletionIndex] === option,
+                }"
+                @mousedown.prevent="applyCompletionTemplate(option)"
+              >
+                <span class="editor-completion-label">{{ option.label }}</span>
+                <span class="editor-completion-detail">{{ option.detail }}</span>
+              </button>
+            </div>
             <div ref="editorRoot" class="editor-root" />
           </div>
         </div>

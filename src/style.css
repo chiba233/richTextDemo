@@ -163,13 +163,37 @@ code {
   margin-bottom: 16px;
 }
 
+.source-tools {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.mini-action {
+  border: 1px solid rgba(165, 78, 31, 0.22);
+  border-radius: 999px;
+  background: rgba(165, 78, 31, 0.08);
+  color: var(--accent);
+  padding: 6px 10px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.mini-hint {
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .editor-stack {
   position: relative;
   flex: 1 1 auto;
   min-height: 0;
   border: 1px solid var(--line);
   border-radius: 18px;
-  overflow: hidden;
+  overflow: visible;
   background: #171311;
   border-color: rgba(255, 210, 122, 0.22);
 }
@@ -177,6 +201,75 @@ code {
 .editor-root {
   width: 100%;
   height: 100%;
+  overflow: hidden;
+  border-radius: 18px;
+}
+
+.editor-root .cm-tooltip {
+  border: 1px solid rgba(255, 210, 122, 0.22);
+  border-radius: 14px;
+  background: #211915;
+  color: #f7f1e8;
+  box-shadow: 0 16px 30px rgba(0, 0, 0, 0.28);
+  z-index: 30;
+}
+
+.editor-root .cm-tooltip-autocomplete > ul > li[aria-selected] {
+  background: rgba(255, 214, 102, 0.16);
+  color: #fff4de;
+}
+
+.editor-root .cm-completionLabel {
+  font-family: "SFMono-Regular", "JetBrains Mono", "Menlo", monospace;
+}
+
+.editor-completion-panel {
+  position: absolute;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 180px;
+  padding: 8px;
+  overflow: auto;
+  border: 1px solid rgba(255, 210, 122, 0.22);
+  border-radius: 14px;
+  background: rgba(33, 25, 21, 0.96);
+  box-shadow: 0 16px 30px rgba(0, 0, 0, 0.28);
+}
+
+.editor-completion-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #f7f1e8;
+  text-align: left;
+  cursor: pointer;
+}
+
+.editor-completion-item:hover {
+  background: rgba(255, 214, 102, 0.14);
+}
+
+.editor-completion-item-active {
+  background: rgba(255, 214, 102, 0.18);
+  color: #fff4de;
+}
+
+.editor-completion-label {
+  font-family: "SFMono-Regular", "JetBrains Mono", "Menlo", monospace;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.editor-completion-detail {
+  color: #d6b67a;
+  font-size: 12px;
 }
 
 .editor-stack:focus-within {
