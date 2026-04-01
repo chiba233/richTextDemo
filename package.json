@@ -9,7 +9,10 @@
     "lint": "prettier --check index.html src"
   },
   "dependencies": {
+    "@codemirror/state": "^6.6.0",
+    "@codemirror/view": "^6.41.0",
     "@vitejs/plugin-vue": "^6.0.5",
+    "codemirror": "^6.0.2",
     "vite": "^8.0.3",
     "vue": "^3.5.31",
     "yume-dsl-rich-text": "^1.0.14",

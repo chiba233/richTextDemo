@@ -1,5 +1,8 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { EditorState, RangeSetBuilder } from "@codemirror/state";
+import { Decoration, EditorView, ViewPlugin } from "@codemirror/view";
+import { basicSetup } from "codemirror";
 import {
   buildPositionTracker,
   createParser,
@@ -7,6 +10,7 @@ import {
   createSimpleInlineHandlers,
   declareMultilineTags,
 } from "yume-dsl-rich-text";
+import { createTokenizerFromParser } from "yume-dsl-shiki-highlight";
 import { enclosingNode, nodeAtOffset, parseSlice } from "yume-dsl-token-walker";
 
 const languages = [
@@ -330,6 +334,19 @@ const parserOptions = computed(() => ({
 }));
 
 const parser = computed(() => createParser(parserOptions.value));
+const tokenizer = computed(() =>
+  createTokenizerFromParser(parserOptions.value, {
+    punct: "#ffd166",
+    tagName: "#ff6b6b",
+    bracket: "#f4a261",
+    operator: "#e9c46a",
+    separator: "#4cc9f0",
+    end: "#80ed99",
+    escape: "#c77dff",
+    argText: "#fff1db",
+    contentText: "#f8f9fa",
+  }),
+);
 
 const structuralState = computed(() => {
   const started = performance.now();
@@ -379,22 +396,114 @@ const sliceState = computed(() => {
   }
 });
 
-const editorInput = ref(null);
-const sliceSection = ref(null);
-const composedSection = ref(null);
-const sourcePanel = ref(null);
-const previewPanel = ref(null);
-const panelMaxHeight = ref(860);
-const editorHeight = ref(720);
-let sectionObserver;
+const editorRoot = ref(null);
+const panelHeight = ref(860);
+let editorView = null;
 
-const syncEditorScroll = () => {
-  if (!editorInput.value) return;
-};
+const buildHighlightPlugin = (tokenize) =>
+  ViewPlugin.fromClass(
+    class {
+      constructor(view) {
+        this.decorations = this.build(view);
+      }
 
-const syncCaretOffset = (event) => {
-  caretOffset.value = event.target.selectionStart ?? 0;
-  syncEditorScroll();
+      update(update) {
+        if (update.docChanged || update.viewportChanged) {
+          this.decorations = this.build(update.view);
+        }
+      }
+
+      build(view) {
+        const tokens = tokenize(view.state.doc.toString());
+        const builder = new RangeSetBuilder();
+        let offset = 0;
+
+        for (const token of tokens) {
+          const length = token.content.length;
+          if (length > 0 && token.color) {
+            builder.add(
+              offset,
+              offset + length,
+              Decoration.mark({ attributes: { style: `color: ${token.color}` } }),
+            );
+          }
+          offset += length;
+        }
+
+        return builder.finish();
+      }
+    },
+    { decorations: (value) => value.decorations },
+  );
+
+const createEditorExtensions = () => [
+  basicSetup,
+  EditorView.lineWrapping,
+  buildHighlightPlugin((text) => tokenizer.value.tokenize(text)),
+  EditorView.updateListener.of((update) => {
+    if (update.docChanged) {
+      const nextSource = update.state.doc.toString();
+      if (nextSource !== source.value) source.value = nextSource;
+    }
+
+    if (update.docChanged || update.selectionSet) {
+      caretOffset.value = update.state.selection.main.head;
+    }
+  }),
+  EditorView.theme({
+    "&": {
+      height: "100%",
+      backgroundColor: "#171311",
+      color: "#f7f1e8",
+    },
+    ".cm-scroller": {
+      overflow: "auto",
+      fontFamily: '"SFMono-Regular", "JetBrains Mono", "Menlo", monospace',
+      lineHeight: "1.65",
+      scrollbarGutter: "stable",
+    },
+    ".cm-content, .cm-gutter": {
+      minHeight: "100%",
+    },
+    ".cm-content": {
+      padding: "18px 0",
+      caretColor: "#fff4de",
+      fontKerning: "none",
+      fontVariantLigatures: "none",
+      fontFeatureSettings: '"liga" 0, "calt" 0',
+    },
+    ".cm-line": {
+      padding: "0 18px",
+    },
+    ".cm-cursor, .cm-dropCursor": {
+      borderLeftColor: "#fff4de",
+    },
+    ".cm-selectionBackground, ::selection": {
+      backgroundColor: "rgba(255, 214, 102, 0.22) !important",
+    },
+    ".cm-activeLine": {
+      backgroundColor: "rgba(255,255,255,0.02)",
+    },
+    ".cm-gutters": {
+      display: "none",
+    },
+    ".cm-focused": {
+      outline: "none",
+    },
+  }),
+];
+
+const mountEditor = () => {
+  if (!editorRoot.value) return;
+  editorView?.destroy();
+  editorView = new EditorView({
+    state: EditorState.create({
+      doc: source.value,
+      extensions: createEditorExtensions(),
+    }),
+    parent: editorRoot.value,
+  });
+  caretOffset.value = editorView.state.selection.main.head;
 };
 
 const previousSource = ref(source.value);
@@ -480,43 +589,53 @@ watch(
   { immediate: true, deep: true },
 );
 
-const updateEditorHeight = () => {
-  const sliceHeight = sliceSection.value?.offsetHeight ?? 0;
-  const composedHeight = composedSection.value?.offsetHeight ?? 0;
-  const totalHeight = sliceHeight + composedHeight;
-  const sourceHeader = sourcePanel.value?.querySelector(".panel-head")?.offsetHeight ?? 0;
-  const sourceMeta = sourcePanel.value?.querySelector(".source-meta")?.offsetHeight ?? 0;
-  const sourceBodyPadding = 40;
-  panelMaxHeight.value = Math.min(980, Math.max(760, window.innerHeight - 210));
-  const maxEditorHeight = Math.max(
-    320,
-    panelMaxHeight.value - sourceHeader - sourceMeta - sourceBodyPadding,
-  );
-  const nextHeight = Math.min(totalHeight, maxEditorHeight);
-  if (nextHeight > 0) editorHeight.value = nextHeight;
+const updatePanelHeight = () => {
+  panelHeight.value = Math.min(1140, Math.max(920, window.innerHeight - 140));
 };
 
 const handleWindowResize = () => {
-  updateEditorHeight();
+  updatePanelHeight();
 };
 
 onMounted(async () => {
   await nextTick();
-  updateEditorHeight();
-  sectionObserver = new ResizeObserver(() => updateEditorHeight());
-  if (sliceSection.value) sectionObserver.observe(sliceSection.value);
-  if (composedSection.value) sectionObserver.observe(composedSection.value);
+  mountEditor();
+  updatePanelHeight();
   window.addEventListener("resize", handleWindowResize);
 });
 
 onBeforeUnmount(() => {
-  sectionObserver?.disconnect();
+  editorView?.destroy();
+  editorView = null;
   window.removeEventListener("resize", handleWindowResize);
+});
+
+watch(
+  enabledTags,
+  async () => {
+    await nextTick();
+    if (!editorView) return;
+    const selection = editorView.state.selection;
+    mountEditor();
+    if (!editorView) return;
+    editorView.dispatch({ selection });
+  },
+  { deep: true },
+);
+
+watch(source, (nextSource) => {
+  if (!editorView) return;
+  const currentDoc = editorView.state.doc.toString();
+  if (currentDoc === nextSource) return;
+  editorView.dispatch({
+    changes: { from: 0, to: currentDoc.length, insert: nextSource },
+    selection: { anchor: Math.min(caretOffset.value, nextSource.length) },
+  });
 });
 
 watch([currentLang, source, enabledTags], async () => {
   await nextTick();
-  updateEditorHeight();
+  updatePanelHeight();
 });
 </script>
 
@@ -562,9 +681,8 @@ watch([currentLang, source, enabledTags], async () => {
       </article>
 
       <article
-        ref="sourcePanel"
         class="panel source-panel"
-        :style="{ maxHeight: `${panelMaxHeight}px` }"
+        :style="{ height: `${panelHeight}px`, maxHeight: `${panelHeight}px` }"
       >
         <header class="panel-head">
           <p class="eyebrow">{{ copy.sourceEyebrow }}</p>
@@ -583,25 +701,15 @@ watch([currentLang, source, enabledTags], async () => {
               <span class="meta-chip">{{ copy.range }}: {{ sliceState.rangeLabel }}</span>
             </div>
           </div>
-          <div class="editor-stack" :style="{ height: `${editorHeight}px` }">
-            <textarea
-              ref="editorInput"
-              v-model="source"
-              class="editor-input"
-              spellcheck="false"
-              @click="syncCaretOffset"
-              @input="syncCaretOffset"
-              @keyup="syncCaretOffset"
-              @scroll="syncEditorScroll"
-            />
+          <div class="editor-stack">
+            <div ref="editorRoot" class="editor-root" />
           </div>
         </div>
       </article>
 
       <article
-        ref="previewPanel"
         class="panel preview-panel"
-        :style="{ maxHeight: `${panelMaxHeight}px` }"
+        :style="{ height: `${panelHeight}px`, maxHeight: `${panelHeight}px` }"
       >
         <header class="panel-head">
           <p class="eyebrow">{{ copy.previewEyebrow }}</p>
@@ -628,11 +736,7 @@ watch([currentLang, source, enabledTags], async () => {
           </div>
 
           <div v-if="sliceState.error" class="error-box">{{ sliceState.error }}</div>
-          <section
-            v-else
-            ref="sliceSection"
-            class="slice-preview-block preview-section preview-section-small"
-          >
+          <section v-else class="slice-preview-block preview-section preview-section-small">
             <div class="slice-preview-head">
               <h3>{{ copy.sliceTitle }}</h3>
               <p v-html="copy.sliceCopy" />
@@ -643,10 +747,7 @@ watch([currentLang, source, enabledTags], async () => {
             </div>
           </section>
 
-          <section
-            ref="composedSection"
-            class="slice-preview-block preview-section preview-section-large"
-          >
+          <section class="slice-preview-block preview-section preview-section-large">
             <div class="slice-preview-head">
               <h3>{{ copy.composedTitle }}</h3>
               <p>{{ copy.composedCopy }}</p>

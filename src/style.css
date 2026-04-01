@@ -155,6 +155,7 @@ code {
 
 .source-body,
 .preview-body {
+  flex: 1;
   min-height: 0;
 }
 
@@ -164,7 +165,7 @@ code {
 
 .editor-stack {
   position: relative;
-  flex: 0 0 auto;
+  flex: 1 1 auto;
   min-height: 0;
   border: 1px solid var(--line);
   border-radius: 18px;
@@ -173,42 +174,9 @@ code {
   border-color: rgba(255, 210, 122, 0.22);
 }
 
-.editor-input {
-  margin: 0;
-  padding: 18px;
-  font:
-    15px/1.65 "SFMono-Regular",
-    "JetBrains Mono",
-    "Menlo",
-    monospace;
-  white-space: pre-wrap;
-  overflow-wrap: break-word;
-  word-break: normal;
-  tab-size: 2;
-  letter-spacing: 0;
-  font-kerning: none;
-  font-variant-ligatures: none;
-  font-feature-settings:
-    "liga" 0,
-    "calt" 0;
-  scrollbar-gutter: stable;
-}
-
-.editor-input {
-  display: block;
+.editor-root {
   width: 100%;
   height: 100%;
-  border: 0;
-  resize: none;
-  background: #171311;
-  color: #f7f1e8;
-  caret-color: #fff4de;
-  outline: none;
-  overflow: auto;
-}
-
-.editor-input::selection {
-  background: rgba(255, 214, 102, 0.22);
 }
 
 .editor-stack:focus-within {
@@ -301,7 +269,8 @@ code {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
-  margin-bottom: 10px;
+  margin-bottom: 12px;
+  flex: 0 0 auto;
 }
 
 .compare-card {
@@ -426,25 +395,25 @@ code {
 }
 
 .slice-preview-block {
-  margin-top: 10px;
+  margin-top: 12px;
 }
 
 .preview-section {
   display: flex;
-  flex: 1;
   flex-direction: column;
   min-height: 0;
   overflow: hidden;
 }
 
 .preview-section-small {
-  flex: 0 0 220px;
-  min-height: 220px;
-  max-height: 220px;
+  flex: 0 0 156px;
+  min-height: 156px;
+  max-height: 156px;
 }
 
 .preview-section-large {
   flex: 1 1 auto;
+  min-height: 0;
 }
 
 .slice-preview-head {
@@ -464,12 +433,13 @@ code {
 
 .slice-preview {
   flex: 1;
-  min-height: 96px;
+  min-height: 0;
 }
 
 .preview-section .preview,
 .preview-section .error-box {
   flex: 1;
+  min-height: 0;
 }
 
 .empty-state {
@@ -494,8 +464,13 @@ code {
     grid-template-columns: 1fr;
   }
 
+  .source-panel,
+  .preview-panel {
+    height: auto !important;
+    max-height: none !important;
+  }
+
   .editor-stack,
-  .editor-input,
   .preview,
   .error-box {
     min-height: 340px;
