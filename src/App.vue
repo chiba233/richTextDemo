@@ -11,6 +11,7 @@ import { Decoration, EditorView, keymap, ViewPlugin } from "@codemirror/view";
 import { basicSetup } from "codemirror";
 import {
   buildPositionTracker,
+  createEasyStableId,
   createParser,
   createPipeHandlers,
   createSimpleInlineHandlers,
@@ -40,6 +41,9 @@ const translations = {
     previewTitle: "结果",
     deepSample: "100 层嵌套",
     deepSampleHint: "生成超深嵌套，观察默认深度限制下的降级行为。",
+    largeSample: "超大文本",
+    largeSampleHint: "生成含真实节点的超大文本，测试渲染性能。",
+    randomInsert: "随机插入",
     declared: "已声明",
     caret: "光标 offset",
     hit: "命中",
@@ -99,6 +103,9 @@ console.log(message);
     previewTitle: "Result",
     deepSample: "100-level Nest",
     deepSampleHint: "Generate very deep nesting to observe fallback under the default depth limit.",
+    largeSample: "Large text",
+    largeSampleHint: "Generate large text with real nodes to test rendering performance.",
+    randomInsert: "Random insert",
     declared: "Declared",
     caret: "Caret offset",
     hit: "Hit",
@@ -161,6 +168,9 @@ console.log(message);
     previewTitle: "結果",
     deepSample: "100層ネスト",
     deepSampleHint: "超深いネストを生成して、デフォルト深度制限での降格動作を確認します。",
+    largeSample: "大量テキスト",
+    largeSampleHint: "実ノードを含む大量テキストを生成し、レンダリング性能をテスト。",
+    randomInsert: "ランダム挿入",
     declared: "宣言済み",
     caret: "キャレット offset",
     hit: "ヒット",
@@ -248,6 +258,59 @@ const createDeepNestedSample = (lang) => {
 const loadDeepNestedSample = () => {
   source.value = createDeepNestedSample(currentLang.value);
   caretOffset.value = source.value.length;
+};
+
+const createLargeSample = () => {
+  const fragments = [
+    "这是一段普通文本。",
+    "=bold<加粗文字>=",
+    "=italic<斜体文字>=",
+    "=link<https://example.com | 链接>=",
+    "=ruby<漢字 | かんじ>=",
+    "中间穿插一些 =bold<重要>= 的内容和 =italic<强调>= 的文字。",
+    "=warn<提示 | info | v1>*\n这是一个块级警告，里面可以有 =bold<加粗>= 和 =link<https://example.com | 链接>=。\n*",
+    "=code<js | example>%\nconst x = Math.random();\nconsole.log(x);\n%",
+    "然后再来一些 =ruby<東京 | とうきょう>= 和 =ruby<大阪 | おおさか>=。",
+    "=bold<嵌套 =italic<斜体>= 结束>=",
+  ];
+  const lines = [];
+  for (let i = 0; i < 200; i++) {
+    lines.push(`段落 ${i + 1}：${fragments[i % fragments.length]}`);
+    if (i % 5 === 4) lines.push("");
+  }
+  return lines.join("\n");
+};
+
+const loadLargeSample = () => {
+  source.value = createLargeSample();
+  caretOffset.value = 0;
+};
+
+const randomSnippets = [
+  "=bold<随机加粗>=",
+  "=italic<随机斜体>=",
+  "=link<https://example.com | 随机链接>=",
+  "=ruby<漢字 | かんじ>=",
+  "随机纯文本片段",
+  "=warn<随机提示 | tag>=",
+  "=bold<=italic<加粗斜体>==>=",
+];
+
+const insertRandomText = () => {
+  const snippet = randomSnippets[Math.floor(Math.random() * randomSnippets.length)];
+  if (editorView) {
+    const docLen = editorView.state.doc.length;
+    const pos = Math.floor(Math.random() * (docLen + 1));
+    editorView.dispatch({
+      changes: { from: pos, insert: snippet },
+      selection: { anchor: pos + snippet.length },
+    });
+    editorView.focus();
+  } else {
+    const pos = Math.floor(Math.random() * (source.value.length + 1));
+    source.value = source.value.slice(0, pos) + snippet + source.value.slice(pos);
+    caretOffset.value = pos + snippet.length;
+  }
 };
 
 const registryOptions = computed(() =>
@@ -693,20 +756,24 @@ const buildHighlightPlugin = (tokenize) =>
       }
 
       build(view) {
+        const { from: vpFrom, to: vpTo } = view.viewport;
+        const docLen = view.state.doc.length;
         const tokens = tokenize(view.state.doc.toString());
         const builder = new RangeSetBuilder();
         let offset = 0;
 
         for (const token of tokens) {
           const length = token.content.length;
-          if (length > 0 && token.color) {
+          const end = offset + length;
+          if (end > docLen) break;
+          if (length > 0 && token.color && end > vpFrom && offset < vpTo) {
             builder.add(
               offset,
-              offset + length,
+              end,
               Decoration.mark({ attributes: { style: `color: ${token.color}` } }),
             );
           }
-          offset += length;
+          offset = end;
         }
 
         return builder.finish();
@@ -918,9 +985,11 @@ const previousRegistrySignature = ref(enabledTags.value.join("|"));
 const previousSegmentCache = ref(new Map());
 const composedState = ref({
   html: "",
+  segments: [],
   composeMs: 0,
   reusedCount: 0,
 });
+const hiddenSegments = ref(new Set());
 
 const getDiffRange = (previousText, nextText) => {
   if (previousText === nextText) {
@@ -960,50 +1029,76 @@ watch(
     const BLOCK_NODE = new Set(["raw", "block"]);
     const tree = structuralState.value.tree;
 
-    const html = tree
-      .map((node, idx) => {
-        const position = node.position;
-        if (!position) return "";
+    const chunks = [];
+    const stableId = createEasyStableId({ prefix: "seg" });
+    let inlineBuf = "";
+    let inlineKeyBuf = "";
 
-        // Workaround: parseSlice cannot consume the trailing \n after
-        // a block/raw closer because it only sees its own slice.
-        // Strip one leading \n from text nodes that follow a block/raw node.
-        if (node.type === "text" && idx > 0 && BLOCK_NODE.has(tree[idx - 1].type)) {
-          const trimmed = node.value.replace(/^\r?\n/, "");
-          if (trimmed === "") return "";
-          const segHtml = renderTokens([{ ...node, value: trimmed }]);
-          nextCache.set(`text::${trimmed}`, segHtml);
-          return segHtml;
-        }
+    const flushInline = () => {
+      if (!inlineBuf) return;
+      const key = stableId({ type: "inline", value: inlineKeyBuf });
+      chunks.push({ key, html: inlineBuf });
+      inlineBuf = "";
+      inlineKeyBuf = "";
+    };
 
-        const slice = source.value.slice(position.start.offset, position.end.offset);
-        const cacheKey = `${node.type}:${node.tag ?? ""}:${slice}`;
-        const overlapsDiff =
-          diff.changed && position.end.offset > diff.start && position.start.offset < diff.newEnd;
-        const matchesTarget =
-          sliceState.value.node?.position &&
-          position.start.offset === sliceState.value.node.position.start.offset &&
-          position.end.offset === sliceState.value.node.position.end.offset;
+    for (let idx = 0; idx < tree.length; idx++) {
+      const node = tree[idx];
+      const position = node.position;
+      if (!position) continue;
 
-        if (!overlapsDiff && !matchesTarget && previousSegmentCache.value.has(cacheKey)) {
-          reusedCount++;
-          const reused = previousSegmentCache.value.get(cacheKey);
-          nextCache.set(cacheKey, reused);
-          return reused;
-        }
+      // Workaround: parseSlice cannot consume the trailing \n after
+      // a block/raw closer because it only sees its own slice.
+      // Strip one leading \n from text nodes that follow a block/raw node.
+      if (node.type === "text" && idx > 0 && BLOCK_NODE.has(tree[idx - 1].type)) {
+        const trimmed = node.value.replace(/^\r?\n/, "");
+        if (trimmed === "") continue;
+        const segHtml = renderTokens([{ ...node, value: trimmed }]);
+        const cacheKey = `text::${trimmed}`;
+        nextCache.set(cacheKey, segHtml);
+        inlineBuf += segHtml;
+        inlineKeyBuf += trimmed;
+        continue;
+      }
 
+      const slice = source.value.slice(position.start.offset, position.end.offset);
+      const cacheKey = `${node.type}:${node.tag ?? ""}:${slice}`;
+      const overlapsDiff =
+        diff.changed && position.end.offset > diff.start && position.start.offset < diff.newEnd;
+      const matchesTarget =
+        sliceState.value.node?.position &&
+        position.start.offset === sliceState.value.node.position.start.offset &&
+        position.end.offset === sliceState.value.node.position.end.offset;
+
+      let segHtml;
+      if (!overlapsDiff && !matchesTarget && previousSegmentCache.value.has(cacheKey)) {
+        reusedCount++;
+        segHtml = previousSegmentCache.value.get(cacheKey);
+      } else {
         const segmentTokens = parseSlice(source.value, position, parser.value, tracker);
-        const segmentHtml = renderTokens(segmentTokens);
-        nextCache.set(cacheKey, segmentHtml);
-        return segmentHtml;
-      })
-      .join("");
+        segHtml = renderTokens(segmentTokens);
+      }
+      nextCache.set(cacheKey, segHtml);
+
+      // Block/raw nodes become their own chunk; inline/text nodes accumulate
+      if (BLOCK_NODE.has(node.type)) {
+        flushInline();
+        const key = stableId({ type: node.type, value: slice });
+        chunks.push({ key, html: segHtml });
+      } else {
+        inlineBuf += segHtml;
+        inlineKeyBuf += slice;
+      }
+    }
+    flushInline();
 
     composedState.value = {
-      html,
+      html: chunks.map((s) => s.html).join(""),
+      segments: chunks,
       composeMs: performance.now() - started,
       reusedCount,
     };
+    hiddenSegments.value = new Set();
     previousSegmentCache.value = nextCache;
     previousSource.value = source.value;
   },
@@ -1018,16 +1113,57 @@ const handleWindowResize = () => {
   updatePanelHeight();
 };
 
+const lazyRoot = ref(null);
+const segmentHeights = ref(new Map());
+let lazyObserver = null;
+
+const setupLazyObserver = () => {
+  if (lazyObserver) lazyObserver.disconnect();
+  if (!lazyRoot.value) return;
+  hiddenSegments.value = new Set();
+  segmentHeights.value = new Map();
+  lazyObserver = new IntersectionObserver(
+    (entries) => {
+      const next = new Set(hiddenSegments.value);
+      const heights = new Map(segmentHeights.value);
+      for (const entry of entries) {
+        const idx = Number(entry.target.dataset.segIdx);
+        if (entry.isIntersecting) {
+          next.delete(idx);
+        } else {
+          heights.set(idx, entry.target.getBoundingClientRect().height);
+          next.add(idx);
+        }
+      }
+      segmentHeights.value = heights;
+      hiddenSegments.value = next;
+    },
+    { root: lazyRoot.value, rootMargin: "200px 0px" },
+  );
+  const items = lazyRoot.value.querySelectorAll("[data-seg-idx]");
+  for (const item of items) lazyObserver.observe(item);
+};
+
+watch(
+  () => composedState.value.segments,
+  async () => {
+    await nextTick();
+    setupLazyObserver();
+  },
+);
+
 onMounted(async () => {
   await nextTick();
   mountEditor();
   updatePanelHeight();
+  setupLazyObserver();
   window.addEventListener("resize", handleWindowResize);
 });
 
 onBeforeUnmount(() => {
   editorView?.destroy();
   editorView = null;
+  if (lazyObserver) lazyObserver.disconnect();
   window.removeEventListener("resize", handleWindowResize);
 });
 
@@ -1083,7 +1219,9 @@ watch([currentLang, source, enabledTags], async () => {
       <div class="hero-links">
         <a href="https://github.com/chiba233/yumeDSL" target="_blank" rel="noreferrer">GitHub</a>
         <a href="https://github.com/chiba233/yumeDSL/wiki" target="_blank" rel="noreferrer">Wiki</a>
-        <a href="https://www.npmjs.com/package/yume-dsl-rich-text" target="_blank" rel="noreferrer">npm</a>
+        <a href="https://www.npmjs.com/package/yume-dsl-rich-text" target="_blank" rel="noreferrer"
+          >npm</a
+        >
       </div>
     </section>
 
@@ -1103,6 +1241,11 @@ watch([currentLang, source, enabledTags], async () => {
               <div class="registry-copy">{{ option.description }}</div>
             </div>
           </label>
+          <div class="tag-list">
+            <span v-for="tag in enabledTags" :key="tag" class="tag-chip">
+              {{ copy.declared }}: {{ tag }}
+            </span>
+          </div>
         </div>
       </article>
 
@@ -1117,15 +1260,25 @@ watch([currentLang, source, enabledTags], async () => {
         <div class="panel-body source-body">
           <div class="source-meta">
             <div class="source-tools">
-              <button type="button" class="mini-action" @click="loadDeepNestedSample">
+              <button
+                type="button"
+                class="mini-action"
+                @click="loadDeepNestedSample"
+                :title="copy.deepSampleHint"
+              >
                 {{ copy.deepSample }}
               </button>
-              <span class="mini-hint">{{ copy.deepSampleHint }}</span>
-            </div>
-            <div class="tag-list">
-              <span v-for="tag in enabledTags" :key="tag" class="tag-chip">
-                {{ copy.declared }}: {{ tag }}
-              </span>
+              <button
+                type="button"
+                class="mini-action"
+                @click="loadLargeSample"
+                :title="copy.largeSampleHint"
+              >
+                {{ copy.largeSample }}
+              </button>
+              <button type="button" class="mini-action" @click="insertRandomText">
+                {{ copy.randomInsert }}
+              </button>
             </div>
             <div class="slice-meta">
               <span class="meta-chip">{{ copy.caret }}: {{ caretOffset }}</span>
@@ -1206,7 +1359,20 @@ watch([currentLang, source, enabledTags], async () => {
               <h3>{{ copy.composedTitle }}</h3>
               <p>{{ copy.composedCopy }}</p>
             </div>
-            <div class="preview" v-html="composedState.html" />
+            <div ref="lazyRoot" class="preview lazy-preview">
+              <div
+                v-for="(seg, idx) in composedState.segments"
+                :key="seg.key"
+                :data-seg-idx="idx"
+                class="lazy-segment"
+                :style="
+                  hiddenSegments.has(idx)
+                    ? { minHeight: (segmentHeights.get(idx) || 0) + 'px' }
+                    : undefined
+                "
+                v-html="hiddenSegments.has(idx) ? '' : seg.html"
+              />
+            </div>
           </section>
         </div>
       </article>
