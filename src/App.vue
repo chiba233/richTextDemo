@@ -7,7 +7,7 @@ import {
   startCompletion,
 } from "@codemirror/autocomplete";
 import { EditorState, Prec, RangeSetBuilder } from "@codemirror/state";
-import { Decoration, EditorView, ViewPlugin, keymap } from "@codemirror/view";
+import { Decoration, EditorView, keymap, ViewPlugin } from "@codemirror/view";
 import { basicSetup } from "codemirror";
 import {
   buildPositionTracker,
