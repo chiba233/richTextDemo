@@ -110,6 +110,7 @@ code {
 .workspace {
   display: grid;
   grid-template-columns: minmax(300px, 0.72fr) minmax(340px, 1.02fr) minmax(340px, 0.9fr);
+  align-items: start;
   gap: 20px;
 }
 
@@ -163,8 +164,8 @@ code {
 
 .editor-stack {
   position: relative;
-  flex: 1;
-  min-height: 720px;
+  flex: 0 0 auto;
+  min-height: 0;
   border: 1px solid var(--line);
   border-radius: 18px;
   overflow: hidden;
@@ -172,11 +173,7 @@ code {
   border-color: rgba(255, 210, 122, 0.22);
 }
 
-.editor-highlight,
 .editor-input {
-  width: 100%;
-  min-height: 100%;
-  height: 100%;
   margin: 0;
   padding: 18px;
   font:
@@ -185,24 +182,29 @@ code {
     "Menlo",
     monospace;
   white-space: pre-wrap;
-  word-break: break-word;
+  overflow-wrap: break-word;
+  word-break: normal;
   tab-size: 2;
-}
-
-.editor-highlight {
-  color: #f7f1e8;
-  pointer-events: none;
+  letter-spacing: 0;
+  font-kerning: none;
+  font-variant-ligatures: none;
+  font-feature-settings:
+    "liga" 0,
+    "calt" 0;
+  scrollbar-gutter: stable;
 }
 
 .editor-input {
-  position: absolute;
-  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
   border: 0;
-  resize: vertical;
-  background: transparent;
-  color: transparent;
+  resize: none;
+  background: #171311;
+  color: #f7f1e8;
   caret-color: #fff4de;
   outline: none;
+  overflow: auto;
 }
 
 .editor-input::selection {
@@ -432,14 +434,17 @@ code {
   flex: 1;
   flex-direction: column;
   min-height: 0;
+  overflow: hidden;
 }
 
 .preview-section-small {
-  flex: 0.45;
+  flex: 0 0 220px;
+  min-height: 220px;
+  max-height: 220px;
 }
 
 .preview-section-large {
-  flex: 1.55;
+  flex: 1 1 auto;
 }
 
 .slice-preview-head {
@@ -490,7 +495,6 @@ code {
   }
 
   .editor-stack,
-  .editor-highlight,
   .editor-input,
   .preview,
   .error-box {

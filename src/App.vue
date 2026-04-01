@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import {
   buildPositionTracker,
   createParser,
@@ -7,7 +7,6 @@ import {
   createSimpleInlineHandlers,
   declareMultilineTags,
 } from "yume-dsl-rich-text";
-import { createTokenizerFromParser } from "yume-dsl-shiki-highlight";
 import { enclosingNode, nodeAtOffset, parseSlice } from "yume-dsl-token-walker";
 
 const languages = [
@@ -251,16 +250,6 @@ const renderTokens = (tokens) =>
     })
     .join("");
 
-const renderHighlightTokens = (tokens) =>
-  tokens
-    .map((token) => {
-      const styles = [];
-      if (token.color) styles.push(`color:${token.color}`);
-      if (token.fontStyle) styles.push(`font-style:${token.fontStyle}`);
-      return `<span${styles.length > 0 ? ` style="${styles.join(";")}"` : ""}>${escapeHtml(token.content)}</span>`;
-    })
-    .join("");
-
 const activeHandlers = computed(() => {
   const enabled = new Set(enabledTags.value);
   const handlers = {};
@@ -342,20 +331,6 @@ const parserOptions = computed(() => ({
 
 const parser = computed(() => createParser(parserOptions.value));
 
-const tokenizer = computed(() =>
-  createTokenizerFromParser(parserOptions.value, {
-    punct: "#ffd166",
-    tagName: "#ff6b6b",
-    bracket: "#f4a261",
-    operator: "#e9c46a",
-    separator: "#4cc9f0",
-    end: "#80ed99",
-    escape: "#c77dff",
-    argText: "#fff1db",
-    contentText: "#f8f9fa",
-  }),
-);
-
 const structuralState = computed(() => {
   const started = performance.now();
   const tree = parser.value.structural(source.value, { trackPositions: true });
@@ -404,12 +379,22 @@ const sliceState = computed(() => {
   }
 });
 
-const highlightedSource = computed(() =>
-  renderHighlightTokens(tokenizer.value.tokenize(source.value)),
-);
+const editorInput = ref(null);
+const sliceSection = ref(null);
+const composedSection = ref(null);
+const sourcePanel = ref(null);
+const previewPanel = ref(null);
+const panelMaxHeight = ref(860);
+const editorHeight = ref(720);
+let sectionObserver;
+
+const syncEditorScroll = () => {
+  if (!editorInput.value) return;
+};
 
 const syncCaretOffset = (event) => {
   caretOffset.value = event.target.selectionStart ?? 0;
+  syncEditorScroll();
 };
 
 const previousSource = ref(source.value);
@@ -494,6 +479,45 @@ watch(
   },
   { immediate: true, deep: true },
 );
+
+const updateEditorHeight = () => {
+  const sliceHeight = sliceSection.value?.offsetHeight ?? 0;
+  const composedHeight = composedSection.value?.offsetHeight ?? 0;
+  const totalHeight = sliceHeight + composedHeight;
+  const sourceHeader = sourcePanel.value?.querySelector(".panel-head")?.offsetHeight ?? 0;
+  const sourceMeta = sourcePanel.value?.querySelector(".source-meta")?.offsetHeight ?? 0;
+  const sourceBodyPadding = 40;
+  panelMaxHeight.value = Math.min(980, Math.max(760, window.innerHeight - 210));
+  const maxEditorHeight = Math.max(
+    320,
+    panelMaxHeight.value - sourceHeader - sourceMeta - sourceBodyPadding,
+  );
+  const nextHeight = Math.min(totalHeight, maxEditorHeight);
+  if (nextHeight > 0) editorHeight.value = nextHeight;
+};
+
+const handleWindowResize = () => {
+  updateEditorHeight();
+};
+
+onMounted(async () => {
+  await nextTick();
+  updateEditorHeight();
+  sectionObserver = new ResizeObserver(() => updateEditorHeight());
+  if (sliceSection.value) sectionObserver.observe(sliceSection.value);
+  if (composedSection.value) sectionObserver.observe(composedSection.value);
+  window.addEventListener("resize", handleWindowResize);
+});
+
+onBeforeUnmount(() => {
+  sectionObserver?.disconnect();
+  window.removeEventListener("resize", handleWindowResize);
+});
+
+watch([currentLang, source, enabledTags], async () => {
+  await nextTick();
+  updateEditorHeight();
+});
 </script>
 
 <template>
@@ -519,7 +543,7 @@ watch(
     </section>
 
     <section class="workspace">
-      <article class="panel">
+      <article class="panel source-panel">
         <header class="panel-head">
           <p class="eyebrow">{{ copy.registryEyebrow }}</p>
           <h2>{{ copy.registryTitle }}</h2>
@@ -537,7 +561,11 @@ watch(
         </div>
       </article>
 
-      <article class="panel">
+      <article
+        ref="sourcePanel"
+        class="panel source-panel"
+        :style="{ maxHeight: `${panelMaxHeight}px` }"
+      >
         <header class="panel-head">
           <p class="eyebrow">{{ copy.sourceEyebrow }}</p>
           <h2>{{ copy.sourceTitle }}</h2>
@@ -555,21 +583,26 @@ watch(
               <span class="meta-chip">{{ copy.range }}: {{ sliceState.rangeLabel }}</span>
             </div>
           </div>
-          <div class="editor-stack">
-            <pre class="editor-highlight" aria-hidden="true" v-html="highlightedSource" />
+          <div class="editor-stack" :style="{ height: `${editorHeight}px` }">
             <textarea
+              ref="editorInput"
               v-model="source"
               class="editor-input"
               spellcheck="false"
               @click="syncCaretOffset"
               @input="syncCaretOffset"
               @keyup="syncCaretOffset"
+              @scroll="syncEditorScroll"
             />
           </div>
         </div>
       </article>
 
-      <article class="panel">
+      <article
+        ref="previewPanel"
+        class="panel preview-panel"
+        :style="{ maxHeight: `${panelMaxHeight}px` }"
+      >
         <header class="panel-head">
           <p class="eyebrow">{{ copy.previewEyebrow }}</p>
           <h2>{{ copy.previewTitle }}</h2>
@@ -595,7 +628,11 @@ watch(
           </div>
 
           <div v-if="sliceState.error" class="error-box">{{ sliceState.error }}</div>
-          <section v-else class="slice-preview-block preview-section preview-section-small">
+          <section
+            v-else
+            ref="sliceSection"
+            class="slice-preview-block preview-section preview-section-small"
+          >
             <div class="slice-preview-head">
               <h3>{{ copy.sliceTitle }}</h3>
               <p v-html="copy.sliceCopy" />
@@ -606,7 +643,10 @@ watch(
             </div>
           </section>
 
-          <section class="slice-preview-block preview-section preview-section-large">
+          <section
+            ref="composedSection"
+            class="slice-preview-block preview-section preview-section-large"
+          >
             <div class="slice-preview-head">
               <h3>{{ copy.composedTitle }}</h3>
               <p>{{ copy.composedCopy }}</p>
