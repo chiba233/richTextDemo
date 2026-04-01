@@ -936,10 +936,24 @@ watch(
     const nextCache = new Map();
     let reusedCount = 0;
 
-    const html = structuralState.value.tree
-      .map((node) => {
+    const BLOCK_NODE = new Set(["raw", "block"]);
+    const tree = structuralState.value.tree;
+
+    const html = tree
+      .map((node, idx) => {
         const position = node.position;
         if (!position) return "";
+
+        // Workaround: parseSlice cannot consume the trailing \n after
+        // a block/raw closer because it only sees its own slice.
+        // Strip one leading \n from text nodes that follow a block/raw node.
+        if (node.type === "text" && idx > 0 && BLOCK_NODE.has(tree[idx - 1].type)) {
+          const trimmed = node.value.replace(/^\r?\n/, "");
+          if (trimmed === "") return "";
+          const segHtml = renderTokens([{ ...node, value: trimmed }]);
+          nextCache.set(`text::${trimmed}`, segHtml);
+          return segHtml;
+        }
 
         const slice = source.value.slice(position.start.offset, position.end.offset);
         const cacheKey = `${node.type}:${node.tag ?? ""}:${slice}`;
