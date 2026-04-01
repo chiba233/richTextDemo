@@ -347,7 +347,33 @@ code {
 }
 
 .demo-warn-title {
+  margin: 0;
+  font-weight: 700;
+}
+
+.demo-warn-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
   margin: 0 0 8px;
+}
+
+.demo-warn-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.demo-warn-meta-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(98, 65, 9, 0.12);
+  color: #7f5806;
+  font-size: 12px;
   font-weight: 700;
 }
 

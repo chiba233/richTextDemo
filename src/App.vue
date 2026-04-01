@@ -50,16 +50,18 @@ const translations = {
       italic: "简单 inline handler，渲染成 em。",
       link: "pipe 参数 handler，支持 $$link(url | text)$$。",
       ruby: "pipe 参数 handler，支持 $$ruby(汉字 | 注音)$$。",
-      warn: "同时声明 inline + block，两种写法都能渲染。",
+      warn: "同时声明 inline + block，支持 $$warn(title | meta1 | meta2)$$。",
       code: "raw handler，支持 $$code(lang | title)% ... %end$$。",
     },
     sampleSource: `欢迎来到 $$bold(yume-dsl-rich-text)$$ demo。
 
-这里我们事先声明了 $$bold(bold)$$、$$italic(italic)$$、$$link(https://github.com/chiba233/yumeDSL | link)$$、$$ruby(漢字 | かんじ)$$、$$warn(warn)$$。
+这里我们事先声明了 $$bold(bold)$$、$$italic(italic)$$、$$link(https://github.com/chiba233/yumeDSL | link)$$、$$ruby(漢字 | かんじ)$$、$$warn(warn | beta | ui)$$。
 
 如果你把左侧的某个声明关掉，再回来看看这里的渲染会怎么退化。
 
-$$warn(注意)*
+参数里的转义只对语法符号生效，比如 $$italic(字面 \\(括号\\) \\| 分隔符)$$。
+
+$$warn(注意 | beta | ui)*
 这不是“自动识别全部标签”。
 只有页面初始化时声明过的 handler，才会被渲染成对应效果。
 *end$$
@@ -102,16 +104,18 @@ console.log(message);
       italic: "Simple inline handler rendered as em.",
       link: "Pipe-arg handler for $$link(url | text)$$.",
       ruby: "Pipe-arg handler for $$ruby(base | ruby-text)$$.",
-      warn: "Declares both inline and block forms.",
+      warn: "Declares both inline and block forms, with $$warn(title | meta1 | meta2)$$.",
       code: "Raw handler for $$code(lang | title)% ... %end$$.",
     },
     sampleSource: `Welcome to the $$bold(yume-dsl-rich-text)$$ demo.
 
-We predeclare $$bold(bold)$$, $$italic(italic)$$, $$link(https://github.com/chiba233/yumeDSL | link)$$, $$ruby(漢字 | kanji)$$, and $$warn(warn)$$.
+We predeclare $$bold(bold)$$, $$italic(italic)$$, $$link(https://github.com/chiba233/yumeDSL | link)$$, $$ruby(漢字 | kanji)$$, and $$warn(warn | beta | ui)$$.
 
 Disable one of the declarations on the left and watch how the rendering degrades.
 
-$$warn(Notice)*
+Escapes only apply to syntax tokens, for example $$italic(literal \\(paren\\) \\| divider)$$.
+
+$$warn(Notice | beta | ui)*
 This does not auto-detect every tag.
 Only handlers declared up front are rendered into custom output.
 *end$$
@@ -154,16 +158,18 @@ console.log(message);
       italic: "em に変換するシンプルな inline handler。",
       link: "$$link(url | text)$$ 用の pipe 引数 handler。",
       ruby: "$$ruby(漢字 | ふりがな)$$ 用の pipe 引数 handler。",
-      warn: "inline と block の両方を宣言。",
+      warn: "inline と block の両方を宣言し、$$warn(title | meta1 | meta2)$$ に対応。",
       code: "$$code(lang | title)% ... %end$$ 用の raw handler。",
     },
     sampleSource: `$$bold(yume-dsl-rich-text)$$ デモへようこそ。
 
-ここでは $$bold(bold)$$、$$italic(italic)$$、$$link(https://github.com/chiba233/yumeDSL | link)$$、$$ruby(漢字 | かんじ)$$、$$warn(warn)$$ を事前に宣言しています。
+ここでは $$bold(bold)$$、$$italic(italic)$$、$$link(https://github.com/chiba233/yumeDSL | link)$$、$$ruby(漢字 | かんじ)$$、$$warn(warn | beta | ui)$$ を事前に宣言しています。
 
 左側の宣言をひとつ外して、表示がどう変化するか試してみてください。
 
-$$warn(注意)*
+エスケープは構文トークンにだけ効きます。たとえば $$italic(文字どおりの \\(括弧\\) \\| 区切り)$$ のように書けます。
+
+$$warn(注意 | beta | ui)*
 これは「すべてのタグを自動認識」する仕組みではありません。
 事前に宣言した handler だけが対応する表示へ変換されます。
 *end$$
@@ -227,9 +233,18 @@ const renderTokens = (tokens) =>
       }
 
       if (token.type === "warn") {
+        const meta = Array.isArray(token.meta)
+          ? token.meta
+              .filter((item) => typeof item === "string" && item)
+              .map((item) => `<span class="demo-warn-meta-chip">${escapeHtml(item)}</span>`)
+              .join("")
+          : "";
         return [
           `<section class="demo-warn">`,
+          `<div class="demo-warn-head">`,
           `<div class="demo-warn-title">${escapeHtml(String(token.title ?? "Notice"))}</div>`,
+          meta ? `<div class="demo-warn-meta">${meta}</div>` : "",
+          `</div>`,
           `<div class="demo-warn-body">${renderTokens(token.value)}</div>`,
           `</section>`,
         ].join("");
@@ -293,11 +308,13 @@ const activeHandlers = computed(() => {
       inline: (args) => ({
         type: "warn",
         title: args.text(0) || "Notice",
-        value: args.materializedTailTokens(1),
+        meta: [args.text(1), args.text(2)].filter(Boolean),
+        value: args.materializedTailTokens(3),
       }),
       block: (args, content) => ({
         type: "warn",
         title: args.text(0) || "Notice",
+        meta: [args.text(1), args.text(2)].filter(Boolean),
         value: content,
       }),
     };
