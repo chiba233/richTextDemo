@@ -1080,6 +1080,11 @@ watch([currentLang, source, enabledTags], async () => {
       </div>
       <h1>{{ copy.heroTitle }}</h1>
       <p class="hero-copy" v-html="copy.heroCopy" />
+      <div class="hero-links">
+        <a href="https://github.com/chiba233/yumeDSL" target="_blank" rel="noreferrer">GitHub</a>
+        <a href="https://github.com/chiba233/yumeDSL/wiki" target="_blank" rel="noreferrer">Wiki</a>
+        <a href="https://www.npmjs.com/package/yume-dsl-rich-text" target="_blank" rel="noreferrer">npm</a>
+      </div>
     </section>
 
     <section class="workspace">
