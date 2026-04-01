@@ -14,6 +14,7 @@ import {
   createParser,
   createPipeHandlers,
   createSimpleInlineHandlers,
+  createSyntax,
   declareMultilineTags,
 } from "yume-dsl-rich-text";
 import { createTokenizerFromParser } from "yume-dsl-shiki-highlight";
@@ -56,34 +57,34 @@ const translations = {
     registryDescriptions: {
       bold: "简单 inline handler，渲染成 strong。",
       italic: "简单 inline handler，渲染成 em。",
-      link: "pipe 参数 handler，支持 $$link(url | text)$$。",
-      ruby: "pipe 参数 handler，支持 $$ruby(汉字 | 注音)$$。",
-      warn: "同时声明 inline + block，支持 $$warn(title | meta1 | meta2)$$。",
-      code: "raw handler，支持 $$code(lang | title)% ... %end$$。",
+      link: "pipe 参数 handler，支持 =link<url | text>=。",
+      ruby: "pipe 参数 handler，支持 =ruby<汉字 | 注音>=。",
+      warn: "同时声明 inline + block，支持 =warn<title | meta1 | meta2>=。",
+      code: "raw handler，支持 =code<lang | title>% ... %。",
     },
-    sampleSource: `欢迎来到 $$bold(yume-dsl-rich-text)$$ demo。
+    sampleSource: `欢迎来到 =bold<yume-dsl-rich-text>= demo。
 
-这里我们事先声明了 $$bold(bold)$$、$$italic(italic)$$、$$link(https://github.com/chiba233/yumeDSL | link)$$、$$ruby(漢字 | かんじ)$$、$$warn(warn | beta | ui)$$。
+这个 demo 使用了自定义语法：= 代替 $$，<> 代替 ()，>= 代替 )$$，~ 代替 \\。
+
+这里我们事先声明了 =bold<bold>=、=italic<italic>=、=link<https://github.com/chiba233/yumeDSL | link>=、=ruby<漢字 | かんじ>=、=warn<warn | beta | ui>=。
 
 如果你把左侧的某个声明关掉，再回来看看这里的渲染会怎么退化。
 
-参数里的转义只对语法符号生效，比如 $$italic(字面 \\(括号\\) \\| 分隔符)$$。
+参数里的转义只对语法符号生效，比如 =italic<字面 ~<尖括号~> ~| 分隔符>=。
 
-嵌套 inline 也可以工作，比如 $$bold(外层里还有 $$italic(italic)$$ 和 $$ruby(漢字 | かんじ)$$)$$。
+嵌套 inline 也可以工作，比如 =bold<外层里还有 =italic<italic>= 和 =ruby<漢字 | かんじ>=>=。
 
-$$warn(注意 | beta | ui)*
-这不是“自动识别全部标签”。
+=warn<注意 | beta | ui>*
+这不是”自动识别全部标签”。
 只有页面初始化时声明过的 handler，才会被渲染成对应效果。
-*end$$
-
-$$warn($$italic(可嵌套标题)$$ | $$italic(beta)$$ | $$bold(ui)$$)*
-块级内容里也可以继续放 $$bold(inline)$$、$$italic(嵌套)$$ 和 $$link(https://github.com/chiba233/yumeDSL | link)$$。
-*end$$
-
-$$code(js | raw demo)%
-const message = "raw tag works";
+*
+=warn<可嵌套标题 | beta | ui>*
+块级内容里也可以继续放 =bold<inline>=、=italic<嵌套>= 和 =link<https://github.com/chiba233/yumeDSL | link>=。
+*
+=code<js | raw demo>%
+const message = “raw tag works”;
 console.log(message);
-%end$$`,
+%`,
   },
   en: {
     heroKicker: "Vue 3 + yume-dsl-rich-text",
@@ -118,34 +119,34 @@ console.log(message);
     registryDescriptions: {
       bold: "Simple inline handler rendered as strong.",
       italic: "Simple inline handler rendered as em.",
-      link: "Pipe-arg handler for $$link(url | text)$$.",
-      ruby: "Pipe-arg handler for $$ruby(base | ruby-text)$$.",
-      warn: "Declares both inline and block forms, with $$warn(title | meta1 | meta2)$$.",
-      code: "Raw handler for $$code(lang | title)% ... %end$$.",
+      link: "Pipe-arg handler for =link<url | text>=.",
+      ruby: "Pipe-arg handler for =ruby<base | ruby-text>=.",
+      warn: "Declares both inline and block forms, with =warn<title | meta1 | meta2>=.",
+      code: "Raw handler for =code<lang | title>% ... %.",
     },
-    sampleSource: `Welcome to the $$bold(yume-dsl-rich-text)$$ demo.
+    sampleSource: `Welcome to the =bold<yume-dsl-rich-text>= demo.
 
-We predeclare $$bold(bold)$$, $$italic(italic)$$, $$link(https://github.com/chiba233/yumeDSL | link)$$, $$ruby(漢字 | kanji)$$, and $$warn(warn | beta | ui)$$.
+This demo uses a custom syntax: = instead of $$, <> instead of (), >= instead of )$$, ~ instead of \\.
+
+We predeclare =bold<bold>=, =italic<italic>=, =link<https://github.com/chiba233/yumeDSL | link>=, =ruby<漢字 | kanji>=, and =warn<warn | beta | ui>=.
 
 Disable one of the declarations on the left and watch how the rendering degrades.
 
-Escapes only apply to syntax tokens, for example $$italic(literal \\(paren\\) \\| divider)$$.
+Escapes only apply to syntax tokens, for example =italic<literal ~<angle~> ~| divider>=.
 
-Nested inline tags also work, for example $$bold(outer with $$italic(italic)$$ and $$ruby(漢字 | kanji)$$ inside)$$.
+Nested inline tags also work, for example =bold<outer with =italic<italic>= and =ruby<漢字 | kanji>= inside>=.
 
-$$warn(Notice | beta | ui)*
+=warn<Notice | beta | ui>*
 This does not auto-detect every tag.
 Only handlers declared up front are rendered into custom output.
-*end$$
-
-$$warn($$italic(Nested title)$$ | $$italic(beta)$$ | $$bold(ui)$$)*
-Block content can still contain $$bold(inline)$$, $$italic(nested)$$, and $$link(https://github.com/chiba233/yumeDSL | link)$$.
-*end$$
-
-$$code(js | raw demo)%
+*
+=warn<Nested title | beta | ui>*
+Block content can still contain =bold<inline>=, =italic<nested>=, and =link<https://github.com/chiba233/yumeDSL | link>=.
+*
+=code<js | raw demo>%
 const message = "raw tag works";
 console.log(message);
-%end$$`,
+%`,
   },
   ja: {
     heroKicker: "Vue 3 + yume-dsl-rich-text",
@@ -180,34 +181,34 @@ console.log(message);
     registryDescriptions: {
       bold: "strong に変換するシンプルな inline handler。",
       italic: "em に変換するシンプルな inline handler。",
-      link: "$$link(url | text)$$ 用の pipe 引数 handler。",
-      ruby: "$$ruby(漢字 | ふりがな)$$ 用の pipe 引数 handler。",
-      warn: "inline と block の両方を宣言し、$$warn(title | meta1 | meta2)$$ に対応。",
-      code: "$$code(lang | title)% ... %end$$ 用の raw handler。",
+      link: "=link<url | text>= 用の pipe 引数 handler。",
+      ruby: "=ruby<漢字 | ふりがな>= 用の pipe 引数 handler。",
+      warn: "inline と block の両方を宣言し、=warn<title | meta1 | meta2>= に対応。",
+      code: "=code<lang | title>% ... % 用の raw handler。",
     },
-    sampleSource: `$$bold(yume-dsl-rich-text)$$ デモへようこそ。
+    sampleSource: `=bold<yume-dsl-rich-text>= デモへようこそ。
 
-ここでは $$bold(bold)$$、$$italic(italic)$$、$$link(https://github.com/chiba233/yumeDSL | link)$$、$$ruby(漢字 | かんじ)$$、$$warn(warn | beta | ui)$$ を事前に宣言しています。
+このデモではカスタム構文を使用しています：$$ の代わりに =、() の代わりに <>、)$$ の代わりに >=、\\ の代わりに ~ を使います。
+
+ここでは =bold<bold>=、=italic<italic>=、=link<https://github.com/chiba233/yumeDSL | link>=、=ruby<漢字 | かんじ>=、=warn<warn | beta | ui>= を事前に宣言しています。
 
 左側の宣言をひとつ外して、表示がどう変化するか試してみてください。
 
-エスケープは構文トークンにだけ効きます。たとえば $$italic(文字どおりの \\(括弧\\) \\| 区切り)$$ のように書けます。
+エスケープは構文トークンにだけ効きます。たとえば =italic<文字どおりの ~<山括弧~> ~| 区切り>= のように書けます。
 
-inline の入れ子も可能で、たとえば $$bold(外側の中に $$italic(italic)$$ と $$ruby(漢字 | かんじ)$$ を入れられます)$$。
+inline の入れ子も可能で、たとえば =bold<外側の中に =italic<italic>= と =ruby<漢字 | かんじ>= を入れられます>=。
 
-$$warn(注意 | beta | ui)*
+=warn<注意 | beta | ui>*
 これは「すべてのタグを自動認識」する仕組みではありません。
 事前に宣言した handler だけが対応する表示へ変換されます。
-*end$$
-
-$$warn($$italic(入れ子タイトル)$$ | $$italic(beta)$$ | $$bold(ui)$$)*
-block 内容の中でも $$bold(inline)$$、$$italic(入れ子)$$、$$link(https://github.com/chiba233/yumeDSL | link)$$ を使えます。
-*end$$
-
-$$code(js | raw demo)%
+*
+=warn<入れ子タイトル | beta | ui>*
+block 内容の中でも =bold<inline>=、=italic<入れ子>=、=link<https://github.com/chiba233/yumeDSL | link>= を使えます。
+*
+=code<js | raw demo>%
 const message = "raw tag works";
 console.log(message);
-%end$$`,
+%`,
   },
 };
 
@@ -239,7 +240,7 @@ const createDeepNestedSample = (lang) => {
   };
   let value = leafByLang[lang] ?? leafByLang.en;
   for (let i = 100; i >= 1; i--) {
-    value = `$$bold(L${i}: ${value})$$`;
+    value = `=bold<L${i}: ${value}>=`;
   }
   return value;
 };
@@ -261,9 +262,9 @@ const completionTemplates = {
     {
       label: "bold",
       detail: "inline",
-      template: "$$bold(${text})$$",
-      insertText: "$$bold()$$",
-      cursorOffset: "$$bold(".length,
+      template: "=bold<${text}>=",
+      insertText: "=bold<>=",
+      cursorOffset: "=bold<".length,
       info: "Insert a simple inline bold tag.",
     },
   ],
@@ -271,9 +272,9 @@ const completionTemplates = {
     {
       label: "italic",
       detail: "inline",
-      template: "$$italic(${text})$$",
-      insertText: "$$italic()$$",
-      cursorOffset: "$$italic(".length,
+      template: "=italic<${text}>=",
+      insertText: "=italic<>=",
+      cursorOffset: "=italic<".length,
       info: "Insert a simple inline italic tag.",
     },
   ],
@@ -281,9 +282,9 @@ const completionTemplates = {
     {
       label: "link",
       detail: "inline",
-      template: "$$link(${https://example.com} | ${label})$$",
-      insertText: "$$link(https://example.com | label)$$",
-      cursorOffset: "$$link(".length,
+      template: "=link<${https://example.com} | ${label}>=",
+      insertText: "=link<https://example.com | label>=",
+      cursorOffset: "=link<".length,
       info: "Insert a link tag with URL and label.",
     },
   ],
@@ -291,9 +292,9 @@ const completionTemplates = {
     {
       label: "ruby",
       detail: "inline",
-      template: "$$ruby(${漢字} | ${かんじ})$$",
-      insertText: "$$ruby(漢字 | かんじ)$$",
-      cursorOffset: "$$ruby(".length,
+      template: "=ruby<${漢字} | ${かんじ}>=",
+      insertText: "=ruby<漢字 | かんじ>=",
+      cursorOffset: "=ruby<".length,
       info: "Insert ruby base text and reading.",
     },
   ],
@@ -301,17 +302,17 @@ const completionTemplates = {
     {
       label: "warn",
       detail: "inline",
-      template: "$$warn(${title} | ${meta1} | ${meta2})$$",
-      insertText: "$$warn(title | meta1 | meta2)$$",
-      cursorOffset: "$$warn(".length,
+      template: "=warn<${title} | ${meta1} | ${meta2}>=",
+      insertText: "=warn<title | meta1 | meta2>=",
+      cursorOffset: "=warn<".length,
       info: "Insert an inline warn tag with extra metadata slots.",
     },
     {
       label: "warn block",
       detail: "block",
-      template: "$$warn(${title} | ${meta1} | ${meta2})*\n${content}\n*end$$",
-      insertText: "$$warn(title | meta1 | meta2)*\ncontent\n*end$$",
-      cursorOffset: "$$warn(".length,
+      template: "=warn<${title} | ${meta1} | ${meta2}>*\n${content}\n*",
+      insertText: "=warn<title | meta1 | meta2>*\ncontent\n*",
+      cursorOffset: "=warn<".length,
       info: "Insert a block warn tag.",
     },
   ],
@@ -319,9 +320,9 @@ const completionTemplates = {
     {
       label: "code",
       detail: "raw",
-      template: "$$code(${lang} | ${title})%\n${content}\n%end$$",
-      insertText: "$$code(lang | title)%\ncontent\n%end$$",
-      cursorOffset: "$$code(".length,
+      template: "=code<${lang} | ${title}>%\n${content}\n%",
+      insertText: "=code<lang | title>%\ncontent\n%",
+      cursorOffset: "=code<".length,
       info: "Insert a raw code block tag.",
     },
   ],
@@ -478,9 +479,23 @@ const activeBlockTags = computed(() => {
   return declareMultilineTags(tags);
 });
 
+const demoSyntax = createSyntax({
+  tagPrefix: "=",
+  tagOpen: "<",
+  tagClose: ">",
+  tagDivider: "|",
+  endTag: ">=",
+  rawOpen: ">%",
+  blockOpen: ">*",
+  rawClose: "%",
+  blockClose: "*",
+  escapeChar: "~",
+});
+
 const parserOptions = computed(() => ({
   handlers: activeHandlers.value,
   blockTags: activeBlockTags.value,
+  syntax: demoSyntax,
 }));
 
 const parser = computed(() => createParser(parserOptions.value));
@@ -573,12 +588,13 @@ const panelHeight = ref(860);
 const selectedCompletionIndex = ref(0);
 const completionPanelStyle = ref({});
 const showCompletionPanel = ref(false);
+let completionDismissedAt = -1;
 let editorView = null;
 
 const currentDslCompletion = computed(() => {
   const head = caretOffset.value;
   const before = source.value.slice(Math.max(0, head - 64), head);
-  const match = before.match(/\${1,2}([A-Za-z-]*)$/);
+  const match = before.match(/(?<![>~])=([A-Za-z-]*)$/);
   if (!match) return null;
 
   const typed = match[1] ?? "";
@@ -700,25 +716,25 @@ const buildHighlightPlugin = (tokenize) =>
   );
 
 const completeDslTag = (context) => {
-  const before = context.matchBefore(/\${1,2}[A-Za-z-]*/);
+  const before = context.matchBefore(/(?<![>~])=[A-Za-z-]*/);
   if (!before) return null;
   if (!context.explicit && before.from === before.to) return null;
 
-  const typed = before.text.slice(2);
+  const typed = before.text.slice(1);
   const options = completionOptions.value.filter((option) => option.label.startsWith(typed));
   if (options.length === 0) return null;
 
   return {
     from: before.from,
     options,
-    validFor: /^\${1,2}[A-Za-z-]*$/,
+    validFor: /^(?<![>~])=[A-Za-z-]*$/,
   };
 };
 
 const shouldTriggerDslCompletion = (view) => {
   const head = view.state.selection.main.head;
   const before = view.state.sliceDoc(Math.max(0, head - 64), head);
-  const match = before.match(/\${1,2}([A-Za-z-]*)$/);
+  const match = before.match(/(?<![>~])=([A-Za-z-]*)$/);
   if (!match) return false;
   return true;
 };
@@ -726,6 +742,10 @@ const shouldTriggerDslCompletion = (view) => {
 const queueCompletion = (view) => {
   queueMicrotask(() => {
     if (!view.hasFocus) return;
+    if (completionDismissedAt >= 0) {
+      completionDismissedAt = -1;
+      return;
+    }
     if (shouldTriggerDslCompletion(view)) {
       selectedCompletionIndex.value = 0;
       showCompletionPanel.value = true;
@@ -771,6 +791,7 @@ const createEditorExtensions = () => [
         run: () => {
           if (!editorView) return false;
           showCompletionPanel.value = false;
+          completionDismissedAt = editorView.state.selection.main.head;
           closeCompletion(editorView);
           completionPanelStyle.value = {};
           return true;
