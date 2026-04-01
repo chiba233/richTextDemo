@@ -30,8 +30,7 @@ const translations = {
   zh: {
     heroKicker: "Vue 3 + yume-dsl-rich-text",
     heroTitle: "左边输入 DSL，右边看渲染结果",
-    heroCopy:
-      "这个 demo 演示的是主 API：<code>createParser</code> + 事先声明好的 handlers。右侧会先展示 <code>parseStructural + nodeAtOffset/enclosingNode + parseSlice</code> 的局部重解析，再展示“旧结果 + 局部更新”拼出来的最终效果图。更进一步的增量解析只是继续覆盖一部分更重的编辑场景。",
+    heroCopy: `这个 demo 演示的是主 API：<code>createParser</code> + 事先声明好的 handlers。右侧会先展示 <code>parseStructural + nodeAtOffset/enclosingNode + parseSlice</code> 的局部重解析，再展示\u201c旧结果 + 局部更新\u201d拼出来的最终效果图。更进一步的增量解析只是继续覆盖一部分更重的编辑场景。此 demo 为纯 AI 生成产物，仅用作展示。`,
     registryEyebrow: "Registry",
     registryTitle: "用户自己声明 handler",
     sourceEyebrow: "Source",
@@ -93,7 +92,7 @@ console.log(message);
     heroKicker: "Vue 3 + yume-dsl-rich-text",
     heroTitle: "Type DSL on the left, see the result on the right",
     heroCopy:
-      "This demo uses the main API: <code>createParser</code> plus predeclared handlers. On the right, it first shows local reparsing with <code>parseStructural + nodeAtOffset/enclosingNode + parseSlice</code>, then the final composed preview built from the previous result plus the updated local slice. More advanced incremental parsing only extends coverage for heavier editing scenarios.",
+      "This demo uses the main API: <code>createParser</code> plus predeclared handlers. On the right, it first shows local reparsing with <code>parseStructural + nodeAtOffset/enclosingNode + parseSlice</code>, then the final composed preview built from the previous result plus the updated local slice. More advanced incremental parsing only extends coverage for heavier editing scenarios. This demo is fully AI-generated and is for demonstration purposes only.",
     registryEyebrow: "Registry",
     registryTitle: "User-declared handlers",
     sourceEyebrow: "Source",
@@ -158,7 +157,7 @@ console.log(message);
     heroKicker: "Vue 3 + yume-dsl-rich-text",
     heroTitle: "左で DSL を入力し、右で結果を確認",
     heroCopy:
-      "このデモはメイン API、つまり <code>createParser</code> と事前宣言した handlers を使っています。右側ではまず <code>parseStructural + nodeAtOffset/enclosingNode + parseSlice</code> による部分再解析を示し、その後に「前回の結果 + 今回の局所更新」で組み立てた最終プレビューを表示します。さらに進んだ増量解析は、より重い編集シナリオの一部を追加でカバーするものです。",
+      "このデモはメイン API、つまり <code>createParser</code> と事前宣言した handlers を使っています。右側ではまず <code>parseStructural + nodeAtOffset/enclosingNode + parseSlice</code> による部分再解析を示し、その後に「前回の結果 + 今回の局所更新」で組み立てた最終プレビューを表示します。さらに進んだ増量解析は、より重い編集シナリオの一部を追加でカバーするものです。このデモは純粋に AI が生成したもので、展示用途のみです。",
     registryEyebrow: "Registry",
     registryTitle: "ユーザーが宣言する handler",
     sourceEyebrow: "Source",
@@ -621,7 +620,7 @@ const sliceState = computed(() => {
       };
     }
 
-    const tracker = buildPositionTracker(source.value);
+    const tracker = getTracker(source.value);
     const started = performance.now();
     const tokens = parseSlice(source.value, targetNode.position, parser.value, tracker);
     return {
@@ -756,16 +755,19 @@ const buildHighlightPlugin = (tokenize) =>
 
       build(view) {
         const { from: vpFrom, to: vpTo } = view.viewport;
-        const docLen = view.state.doc.length;
-        const tokens = tokenize(view.state.doc.toString());
+        // Expand viewport range to line boundaries for correct tokenization
+        const lineFrom = view.state.doc.lineAt(vpFrom).from;
+        const lineTo = view.state.doc.lineAt(vpTo).to;
+        const slice = view.state.sliceDoc(lineFrom, lineTo);
+        const tokens = tokenize(slice);
         const builder = new RangeSetBuilder();
-        let offset = 0;
+        let offset = lineFrom;
 
         for (const token of tokens) {
           const length = token.content.length;
           const end = offset + length;
-          if (end > docLen) break;
-          if (length > 0 && token.color && end > vpFrom && offset < vpTo) {
+          if (end > lineTo) break;
+          if (length > 0 && token.color) {
             builder.add(
               offset,
               end,
@@ -982,6 +984,15 @@ const mountEditor = () => {
 const previousSource = ref(source.value);
 const previousRegistrySignature = ref(enabledTags.value.join("|"));
 const previousSegmentCache = ref(new Map());
+let cachedTracker = null;
+let cachedTrackerText = "";
+const getTracker = (text) => {
+  if (text !== cachedTrackerText) {
+    cachedTracker = buildPositionTracker(text);
+    cachedTrackerText = text;
+  }
+  return cachedTracker;
+};
 const composedState = ref({
   html: "",
   segments: [],
@@ -1093,11 +1104,11 @@ watch(
 
     // ── Full rebuild (first run / registry change) ──
     if (registryChanged || prevChunks.length === 0) {
-      const tracker = buildPositionTracker(text);
+      const tracker = getTracker(text);
       const cache = new Map();
       const { chunks, reused } = buildChunks(tree, 0, tree.length, text, tracker, cache);
       composedState.value = {
-        html: chunks.map((c) => c.html).join(""),
+        html: "",
         segments: chunks,
         composeMs: performance.now() - started,
         reusedCount: reused,
@@ -1139,17 +1150,12 @@ watch(
       }
     }
 
-    const before = prevChunks.slice(0, firstAffected);
-    const after = prevChunks.slice(lastAffected + 1).map((c) => ({
-      ...c,
-      key: c.key.replace(/-\d+-\d+$/, `-${c.srcFrom + delta}-${c.srcTo + delta}`),
-      srcFrom: c.srcFrom + delta,
-      srcTo: c.srcTo + delta,
-    }));
-
     // Find tree node range that covers the affected source region
-    const rebuildFrom = before.length > 0 ? before[before.length - 1].srcTo : 0;
-    const rebuildTo = after.length > 0 ? after[0].srcFrom : text.length;
+    const rebuildFrom = firstAffected > 0 ? prevChunks[firstAffected - 1].srcTo : 0;
+    const afterFirstIdx = lastAffected + 1;
+    const rebuildTo =
+      afterFirstIdx < prevChunks.length ? prevChunks[afterFirstIdx].srcFrom + delta : text.length;
+
     let treeFrom = 0;
     let treeTo = tree.length;
     for (let i = 0; i < tree.length; i++) {
@@ -1168,13 +1174,25 @@ watch(
     }
 
     // Rebuild only the affected slice; reuse the segment cache
-    const tracker = buildPositionTracker(text);
+    const tracker = getTracker(text);
     const cache = previousSegmentCache.value;
     const { chunks: middle, reused } = buildChunks(tree, treeFrom, treeTo, text, tracker, cache);
 
-    const chunks = [...before, ...middle, ...after];
+    // Build new array: before (as-is) + middle (rebuilt) + after (shifted)
+    const before = prevChunks.slice(0, firstAffected);
+    const after =
+      delta === 0
+        ? prevChunks.slice(afterFirstIdx)
+        : prevChunks.slice(afterFirstIdx).map((c) => ({
+            key: c.key.replace(/-\d+-\d+$/, `-${c.srcFrom + delta}-${c.srcTo + delta}`),
+            html: c.html,
+            srcFrom: c.srcFrom + delta,
+            srcTo: c.srcTo + delta,
+          }));
+
+    const chunks = before.concat(middle, after);
     composedState.value = {
-      html: chunks.map((c) => c.html).join(""),
+      html: "",
       segments: chunks,
       composeMs: performance.now() - started,
       reusedCount: reused + before.length + after.length,
