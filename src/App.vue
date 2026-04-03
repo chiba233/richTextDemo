@@ -37,8 +37,8 @@ const translations = {
     sourceTitle: "用户输入",
     previewEyebrow: "Preview",
     previewTitle: "结果",
-    deepSample: "100 层嵌套",
-    deepSampleHint: "生成超深嵌套，观察默认深度限制下的降级行为。",
+    deepSample: "10000 层嵌套",
+    deepSampleHint: "生成 10000 层嵌套，观察 9950 深度限制下的降级行为。",
     largeSample: "超大文本",
     largeSampleHint: "生成含真实节点的超大文本，测试渲染性能。",
     randomInsert: "随机插入",
@@ -99,8 +99,9 @@ console.log(message);
     sourceTitle: "Input",
     previewEyebrow: "Preview",
     previewTitle: "Result",
-    deepSample: "100-level Nest",
-    deepSampleHint: "Generate very deep nesting to observe fallback under the default depth limit.",
+    deepSample: "10000-level Nest",
+    deepSampleHint:
+      "Generate 10000 levels of nesting to observe fallback under a depth limit of 9950.",
     largeSample: "Large text",
     largeSampleHint: "Generate large text with real nodes to test rendering performance.",
     randomInsert: "Random insert",
@@ -164,8 +165,8 @@ console.log(message);
     sourceTitle: "入力",
     previewEyebrow: "Preview",
     previewTitle: "結果",
-    deepSample: "100層ネスト",
-    deepSampleHint: "超深いネストを生成して、デフォルト深度制限での降格動作を確認します。",
+    deepSample: "10000層ネスト",
+    deepSampleHint: "10000 層ネストを生成し、9950 深度制限での降格動作を確認します。",
     largeSample: "大量テキスト",
     largeSampleHint: "実ノードを含む大量テキストを生成し、レンダリング性能をテスト。",
     randomInsert: "ランダム挿入",
@@ -247,7 +248,7 @@ const createDeepNestedSample = (lang) => {
     ja: "depth-limit demo",
   };
   let value = leafByLang[lang] ?? leafByLang.en;
-  for (let i = 100; i >= 1; i--) {
+  for (let i = 10000; i >= 1; i--) {
     value = `=bold<L${i}: ${value}>=`;
   }
   return value;
@@ -400,35 +401,82 @@ const escapeHtml = (value) =>
 const renderText = (value) => escapeHtml(String(value)).replaceAll("\n", "<br />");
 const trimTrailingBreak = (html) => html.replace(/(?:<br \/>)+$/, "");
 
-const renderTokens = (tokens) =>
-  tokens
-    .map((token) => {
-      if (token.type === "text") return renderText(token.value);
-      if (token.type === "bold") return `<strong>${renderTokens(token.value)}</strong>`;
-      if (token.type === "italic") return `<em>${renderTokens(token.value)}</em>`;
+const renderTokens = (tokens) => {
+  const html = [];
+  const stack = [];
 
-      if (token.type === "link") {
-        const href = typeof token.href === "string" && token.href ? token.href : "#";
-        return `<a class="demo-link" href="${escapeHtml(href)}" target="_blank" rel="noreferrer">${renderTokens(token.value)}</a>`;
-      }
+  const pushTokens = (items) => {
+    for (let i = items.length - 1; i >= 0; i--) {
+      stack.push({ kind: "token", token: items[i] });
+    }
+  };
 
-      if (token.type === "ruby") {
-        return `<ruby class="demo-ruby">${escapeHtml(String(token.base ?? ""))}<rt>${escapeHtml(String(token.rt ?? ""))}</rt></ruby>`;
-      }
+  const pushWrappedTokens = (items, open, close) => {
+    stack.push({ kind: "html", value: close });
+    pushTokens(items);
+    stack.push({ kind: "html", value: open });
+  };
 
-      if (token.type === "warn") {
-        const title =
-          Array.isArray(token.titleTokens) && token.titleTokens.length > 0
-            ? renderTokens(token.titleTokens)
-            : escapeHtml(String(token.title ?? "Notice"));
-        const meta = Array.isArray(token.metaTokens)
-          ? token.metaTokens
-              .filter((item) => Array.isArray(item) && item.length > 0)
-              .map((item) => `<span class="demo-warn-meta-chip">${renderTokens(item)}</span>`)
-              .join("")
-          : "";
-        const body = trimTrailingBreak(renderTokens(token.value));
-        return [
+  pushTokens(tokens);
+
+  while (stack.length > 0) {
+    const frame = stack.pop();
+
+    if (frame.kind === "html") {
+      html.push(frame.value);
+      continue;
+    }
+
+    const { token } = frame;
+
+    if (token.type === "text") {
+      html.push(renderText(token.value));
+      continue;
+    }
+
+    if (token.type === "bold") {
+      pushWrappedTokens(token.value, "<strong>", "</strong>");
+      continue;
+    }
+
+    if (token.type === "italic") {
+      pushWrappedTokens(token.value, "<em>", "</em>");
+      continue;
+    }
+
+    if (token.type === "link") {
+      const href = typeof token.href === "string" && token.href ? token.href : "#";
+      pushWrappedTokens(
+        token.value,
+        `<a class="demo-link" href="${escapeHtml(href)}" target="_blank" rel="noreferrer">`,
+        "</a>",
+      );
+      continue;
+    }
+
+    if (token.type === "ruby") {
+      html.push(
+        `<ruby class="demo-ruby">${escapeHtml(String(token.base ?? ""))}<rt>${escapeHtml(
+          String(token.rt ?? ""),
+        )}</rt></ruby>`,
+      );
+      continue;
+    }
+
+    if (token.type === "warn") {
+      const title =
+        Array.isArray(token.titleTokens) && token.titleTokens.length > 0
+          ? renderTokens(token.titleTokens)
+          : escapeHtml(String(token.title ?? "Notice"));
+      const meta = Array.isArray(token.metaTokens)
+        ? token.metaTokens
+            .filter((item) => Array.isArray(item) && item.length > 0)
+            .map((item) => `<span class="demo-warn-meta-chip">${renderTokens(item)}</span>`)
+            .join("")
+        : "";
+      const body = trimTrailingBreak(renderTokens(token.value));
+      html.push(
+        [
           `<section class="demo-warn">`,
           `<div class="demo-warn-head">`,
           `<div class="demo-warn-title">${title}</div>`,
@@ -436,13 +484,16 @@ const renderTokens = (tokens) =>
           `</div>`,
           `<div class="demo-warn-body">${body}</div>`,
           `</section>`,
-        ].join("");
-      }
+        ].join(""),
+      );
+      continue;
+    }
 
-      if (token.type === "code") {
-        const language = escapeHtml(String(token.language ?? "plain"));
-        const title = escapeHtml(String(token.title ?? ""));
-        return [
+    if (token.type === "code") {
+      const language = escapeHtml(String(token.language ?? "plain"));
+      const title = escapeHtml(String(token.title ?? ""));
+      html.push(
+        [
           `<section class="demo-code">`,
           `<div class="demo-code-head">`,
           `<span class="demo-code-lang">${language}</span>`,
@@ -450,13 +501,21 @@ const renderTokens = (tokens) =>
           `</div>`,
           `<pre class="demo-code-body"><code>${escapeHtml(String(token.value ?? ""))}</code></pre>`,
           `</section>`,
-        ].join("");
-      }
+        ].join(""),
+      );
+      continue;
+    }
 
-      if (Array.isArray(token.value)) return renderTokens(token.value);
-      return `<span>${escapeHtml(String(token.value ?? ""))}</span>`;
-    })
-    .join("");
+    if (Array.isArray(token.value)) {
+      pushTokens(token.value);
+      continue;
+    }
+
+    html.push(`<span>${escapeHtml(String(token.value ?? ""))}</span>`);
+  }
+
+  return html.join("");
+};
 
 const activeHandlers = computed(() => {
   const enabled = new Set(enabledTags.value);
@@ -557,6 +616,7 @@ const parserOptions = computed(() => ({
   handlers: activeHandlers.value,
   blockTags: activeBlockTags.value,
   syntax: demoSyntax,
+  depthLimit: 9950,
 }));
 
 const parser = computed(() => createParser(parserOptions.value));
