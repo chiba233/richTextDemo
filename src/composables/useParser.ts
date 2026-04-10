@@ -30,6 +30,7 @@ export const useParser = (
     blockTags: activeBlockTags.value,
     syntax: demoSyntax,
     depthLimit: 9950,
+    implicitInlineShorthand: true,
   }));
 
   const parser = computed(() => createParser(parserOptions.value));

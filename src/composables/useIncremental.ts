@@ -152,7 +152,13 @@ const buildSegments = (
 export const useIncremental = (
   source: Ref<string>,
   enabledTags: Ref<string[]>,
-  parserOptions: ComputedRef<{ handlers: Record<string, TagHandler>; blockTags: BlockTagInput[]; syntax: SyntaxConfig; depthLimit: number }>,
+  parserOptions: ComputedRef<{
+    handlers: Record<string, TagHandler>;
+    blockTags: BlockTagInput[];
+    syntax: SyntaxConfig;
+    depthLimit: number;
+    implicitInlineShorthand: boolean | readonly string[];
+  }>,
   parser: ComputedRef<Parser>,
   caretOffset: Ref<number>,
   copy: ComputedRef<TranslationCopy>,
@@ -203,6 +209,7 @@ export const useIncremental = (
       blockTags: opts.blockTags,
       syntax: opts.syntax,
       depthLimit: opts.depthLimit,
+      implicitInlineShorthand: opts.implicitInlineShorthand,
     };
   };
 
