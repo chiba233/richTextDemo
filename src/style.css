@@ -133,7 +133,7 @@ code {
 
 .workspace {
   display: grid;
-  grid-template-columns: minmax(300px, 0.72fr) minmax(340px, 1.02fr) minmax(340px, 0.9fr);
+  grid-template-columns: minmax(220px, 0.52fr) minmax(320px, 0.92fr) minmax(340px, 1.0fr);
   align-items: start;
   gap: 20px;
 }
@@ -331,6 +331,7 @@ code {
 .registry-grid {
   display: grid;
   gap: 12px;
+  overflow: auto;
 }
 
 .registry-item {
@@ -370,6 +371,7 @@ code {
   color: var(--accent);
   font-size: 13px;
   font-weight: 600;
+  word-break: break-all;
 }
 
 .preview,
@@ -385,7 +387,7 @@ code {
 
 .compare-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 12px;
   margin-bottom: 12px;
   flex: 0 0 auto;
@@ -396,6 +398,8 @@ code {
   border: 1px solid var(--line);
   border-radius: 16px;
   background: rgba(255, 255, 255, 0.5);
+  min-width: 0;
+  overflow: hidden;
 }
 
 .compare-label {
@@ -405,12 +409,20 @@ code {
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+  word-break: break-all;
 }
 
 .compare-value {
   font-size: 18px;
   font-weight: 800;
   letter-spacing: -0.03em;
+  word-break: break-all;
+}
+
+.compare-value-small {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0;
 }
 
 .compare-card-wide {
@@ -443,6 +455,14 @@ code {
 
 .preview em {
   color: #5f4a38;
+}
+
+.flat-bold {
+  font-weight: 700;
+}
+
+.flat-italic {
+  font-style: italic;
 }
 
 .demo-link {
@@ -578,12 +598,14 @@ code {
 .slice-preview {
   flex: 1;
   min-height: 0;
+  overflow: auto;
 }
 
 .preview-section .preview,
 .preview-section .error-box {
   flex: 1;
   min-height: 0;
+  overflow: auto;
 }
 
 .empty-state {
@@ -615,6 +637,8 @@ code {
 }
 
 .lazy-preview {
+  flex: 1;
+  min-height: 0;
   overflow: auto;
 }
 
@@ -630,6 +654,7 @@ code {
   .hero-topline {
     align-items: flex-start;
     flex-direction: column;
+    margin-bottom: 16px;
   }
 
   .workspace {
@@ -640,10 +665,14 @@ code {
     grid-template-columns: 1fr;
   }
 
-  .source-panel,
+  .source-panel {
+    height: 900px !important;
+    max-height: 900px !important;
+  }
+
   .preview-panel {
-    height: auto !important;
-    max-height: none !important;
+    height: 900px !important;
+    max-height: 900px !important;
   }
 
   .editor-stack,

@@ -6,7 +6,11 @@
     "dev": "vite --host",
     "build": "vite build",
     "preview": "vite preview",
-    "lint": "prettier --check index.html src"
+    "lint": "eslint src && vue-tsc --noEmit",
+    "lint:eslint": "eslint src",
+    "lint:ts": "vue-tsc --noEmit",
+    "format": "prettier --write index.html src",
+    "format:check": "prettier --check index.html src"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.1",
@@ -14,10 +18,20 @@
     "@codemirror/view": "^6.41.0",
     "@vitejs/plugin-vue": "^6.0.5",
     "codemirror": "^6.0.2",
-    "vite": "^8.0.3",
+    "vite": "8.0.5",
     "vue": "^3.5.31",
-    "yume-dsl-rich-text": "^1.1.7",
+    "yume-dsl-rich-text": "^1.2.6",
     "yume-dsl-shiki-highlight": "^2.0.1",
     "yume-dsl-token-walker": "^1.0.6"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^25.6.0",
+    "eslint": "^10.2.0",
+    "eslint-plugin-vue": "^10.8.0",
+    "globals": "^17.4.0",
+    "typescript": "^6.0.2",
+    "typescript-eslint": "^8.58.1",
+    "vue-tsc": "^3.2.6"
   }
 }
