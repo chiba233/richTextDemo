@@ -54,8 +54,10 @@ const translations: Record<string, TranslationCopy> = {
 这个 demo 使用了自定义语法：= 代替 $$，<> 代替 ()，>= 代替 )$$，~ 代替 \\。
 
 这里我们事先声明了 =bold<bold>=、=italic<italic>=、=link<https://github.com/chiba233/yumeDSL | link>=、=ruby<漢字 | かんじ>=、=warn<warn | beta | ui>=。
-
 如果你把左侧的某个声明关掉，再回来看看这里的渲染会怎么退化。
+
+在 inline 参数内部还可以使用简写形式——省掉前后缀，直接写 bold<内容> 即可。
+简写会被完整 DSL 抢占：=bold<完整标签 italic<简写嵌套> 跟 ruby<漢字 | かんじ> 可以混用>=。
 
 参数里的转义只对语法符号生效，比如 =italic<字面 ~<尖括号~> ~| 分隔符>=。
 
@@ -122,8 +124,10 @@ console.log(message);
 This demo uses a custom syntax: = instead of $$, <> instead of (), >= instead of )$$, ~ instead of \\.
 
 We predeclare =bold<bold>=, =italic<italic>=, =link<https://github.com/chiba233/yumeDSL | link>=, =ruby<漢字 | kanji>=, and =warn<warn | beta | ui>=.
-
 Disable one of the declarations on the left and watch how the rendering degrades.
+
+Inside inline args you can also use shorthand — skip the prefix/suffix and just write bold<content>.
+Shorthand yields to full DSL: =bold<full tag with italic<shorthand nested> and ruby<漢字 | kanji> mixed>=.
 
 Escapes only apply to syntax tokens, for example =italic<literal ~<angle~> ~| divider>=.
 
@@ -189,8 +193,10 @@ console.log(message);
 このデモではカスタム構文を使用しています：$$ の代わりに =、() の代わりに <>、)$$ の代わりに >=、\\ の代わりに ~ を使います。
 
 ここでは =bold<bold>=、=italic<italic>=、=link<https://github.com/chiba233/yumeDSL | link>=、=ruby<漢字 | かんじ>=、=warn<warn | beta | ui>= を事前に宣言しています。
-
 左側の宣言をひとつ外して、表示がどう変化するか試してみてください。
+
+inline 引数の中では省略形も使えます——前後の記号を省いて bold<内容> と書くだけで OK。
+省略形はフル DSL に譲ります：=bold<フルタグに italic<省略ネスト> と ruby<漢字 | かんじ> を混在>=。
 
 エスケープは構文トークンにだけ効きます。たとえば =italic<文字どおりの ~<山括弧~> ~| 区切り>= のように書けます。
 

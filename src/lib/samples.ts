@@ -1,7 +1,8 @@
 export const createDeepNestedSample = (_lang: string): string => {
   let value = "depth-limit demo";
   for (let i = 10000; i >= 1; i--) {
-    value = `=bold<L${i}: ${value}>=`;
+    // outermost layer must be full DSL; inner layers use shorthand
+    value = i === 1 ? `=bold<L${i}: ${value}>=` : `bold<L${i}: ${value}>`;
   }
   return value;
 };
