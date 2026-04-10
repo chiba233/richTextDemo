@@ -1,4 +1,4 @@
-import { computed, shallowRef, watch, type Ref, type ComputedRef } from "vue";
+import { shallowRef, watch, type Ref, type ComputedRef } from "vue";
 import {
   createIncrementalSession,
   buildPositionTracker,
@@ -193,6 +193,7 @@ export const useIncremental = (
       incrementalMs: sessionMs,
       incrementalMode: mode,
     };
+    recomputeSlice();
   };
 
   const makeIncOptions = () => {
@@ -275,10 +276,17 @@ export const useIncremental = (
     }
   };
 
-  // Slice state: cursor-based local reparse for preview
-  const sliceState = computed<SliceResult>(() => {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const _tree = currentTree.value; // reactive dependency
+  // Slice state: cursor-based local reparse for preview (deferred with compose)
+  const sliceState = shallowRef<SliceResult>({
+    error: "",
+    tokens: [],
+    sliceMs: 0,
+    targetLabel: copy.value.noSlice,
+    rangeLabel: "n/a",
+    node: null,
+  });
+
+  const recomputeSlice = () => {
     try {
       const tree = currentTree.value as StructuralNode[];
       const text = source.value;
@@ -288,7 +296,7 @@ export const useIncremental = (
       const targetNode = tagNode ?? deepNode;
 
       if (!targetNode?.position) {
-        return {
+        sliceState.value = {
           error: "",
           tokens: [],
           sliceMs: 0,
@@ -296,13 +304,14 @@ export const useIncremental = (
           rangeLabel: "n/a",
           node: null,
         };
+        return;
       }
 
       const tracker = getCachedTracker(text);
       const started = performance.now();
       const tokens = parseSlice(text, targetNode.position, parser.value, tracker);
       const tagLabel = "tag" in targetNode ? (targetNode as { tag: string }).tag : "";
-      return {
+      sliceState.value = {
         error: "",
         tokens,
         sliceMs: performance.now() - started,
@@ -311,7 +320,7 @@ export const useIncremental = (
         node: targetNode,
       };
     } catch (error) {
-      return {
+      sliceState.value = {
         error: error instanceof Error ? (error.stack ?? error.message) : String(error),
         tokens: [],
         sliceMs: 0,
@@ -320,7 +329,7 @@ export const useIncremental = (
         node: null,
       };
     }
-  });
+  };
 
   // Watch for external source changes (language switch, sample load)
   watch(source, (newSource) => {
@@ -343,6 +352,17 @@ export const useIncremental = (
     },
     { deep: true },
   );
+
+  // Recompute slice when caret moves (deferred)
+  let sliceRafId = 0;
+  watch(caretOffset, () => {
+    if (!sliceRafId) {
+      sliceRafId = requestAnimationFrame(() => {
+        sliceRafId = 0;
+        recomputeSlice();
+      });
+    }
+  });
 
   // Initialize
   initSession();
