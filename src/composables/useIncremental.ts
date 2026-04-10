@@ -18,18 +18,56 @@ type Session = ReturnType<typeof createIncrementalSession>;
 
 const BLOCK_NODE_TYPES: ReadonlySet<string> = new Set(["raw", "block"]);
 
+// Content-based cache key with small sample — fallback when WeakMap misses
+const KEY_SAMPLE = 16;
+const KEY_THRESHOLD = KEY_SAMPLE * 2 + 16;
+
+const makeCacheKey = (
+  text: string,
+  type: string,
+  tag: string,
+  start: number,
+  end: number,
+): string => {
+  const len = end - start;
+  if (len <= KEY_THRESHOLD) {
+    return `${type}:${tag}:${text.slice(start, end)}`;
+  }
+  return `${type}:${tag}:${len}:${text.slice(start, start + KEY_SAMPLE)}…${text.slice(end - KEY_SAMPLE, end)}`;
+};
+
+// Cached position tracker — avoids rebuilding on unchanged source
+let cachedTrackerText = "";
+let cachedTracker: ReturnType<typeof buildPositionTracker> | null = null;
+
+const getCachedTracker = (text: string) => {
+  if (cachedTracker && cachedTrackerText === text) return cachedTracker;
+  cachedTrackerText = text;
+  cachedTracker = buildPositionTracker(text);
+  return cachedTracker;
+};
+
 const buildSegments = (
   tree: readonly StructuralNode[],
   text: string,
   parser: Parser,
-  cache: Map<string, TextToken[]>,
+  contentCache: Map<string, TextToken[]>,
+  identityCache: WeakMap<StructuralNode, TextToken[]>,
+  offsetCache: { text: string; map: Map<string, TextToken[]> },
 ): { segments: Segment[]; reusedCount: number } => {
-  const tracker = buildPositionTracker(text);
+  const tracker = getCachedTracker(text);
   const segments: Segment[] = [];
   let inlineBuf: TextToken[] = [];
   let inlineSrcFrom = -1;
   let inlineSrcTo = -1;
   let reused = 0;
+
+  // Offset cache valid only for current text
+  if (offsetCache.text !== text) {
+    offsetCache.text = text;
+    offsetCache.map.clear();
+  }
+  const oMap = offsetCache.map;
 
   const flushInline = () => {
     if (inlineBuf.length === 0) return;
@@ -60,34 +98,51 @@ const buildSegments = (
       const tokens = parseSlice(text, position, parser, tracker);
       if (inlineSrcFrom < 0) inlineSrcFrom = position.start.offset;
       inlineSrcTo = position.end.offset;
-      inlineBuf = [...inlineBuf, ...tokens];
+      inlineBuf.push(...tokens);
       continue;
     }
 
-    const sourceSlice = text.slice(position.start.offset, position.end.offset);
-    const nodeTag = "tag" in node ? (node as { tag: string }).tag : "";
-    const cacheKey = `${node.type}:${nodeTag}:${sourceSlice}`;
+    const start = position.start.offset;
+    const end = position.end.offset;
+    const offsetKey = `${start}:${end}`;
 
-    let tokens = cache.get(cacheKey);
+    // Tier 1: offset cache (same text, zero text.slice cost)
+    let tokens = oMap.get(offsetKey);
     if (tokens) {
       reused++;
     } else {
-      tokens = parseSlice(text, position, parser, tracker);
-      cache.set(cacheKey, tokens);
+      // Tier 2: identity cache (node object reuse across incremental edits)
+      tokens = identityCache.get(node);
+      if (tokens) {
+        reused++;
+      } else {
+        // Tier 3: content cache (cross-text reuse via sampled content key)
+        const nodeTag = "tag" in node ? (node as { tag: string }).tag : "";
+        const cacheKey = makeCacheKey(text, node.type, nodeTag, start, end);
+        tokens = contentCache.get(cacheKey);
+        if (tokens) {
+          reused++;
+        } else {
+          tokens = parseSlice(text, position, parser, tracker);
+          contentCache.set(cacheKey, tokens);
+        }
+        identityCache.set(node, tokens);
+      }
+      oMap.set(offsetKey, tokens);
     }
 
     if (BLOCK_NODE_TYPES.has(node.type)) {
       flushInline();
       segments.push({
-        key: `b-${position.start.offset}-${position.end.offset}`,
+        key: `b-${start}-${end}`,
         tokens,
-        srcFrom: position.start.offset,
-        srcTo: position.end.offset,
+        srcFrom: start,
+        srcTo: end,
       });
     } else {
-      if (inlineSrcFrom < 0) inlineSrcFrom = position.start.offset;
-      inlineSrcTo = position.end.offset;
-      inlineBuf = [...inlineBuf, ...tokens];
+      if (inlineSrcFrom < 0) inlineSrcFrom = start;
+      inlineSrcTo = end;
+      inlineBuf.push(...tokens);
     }
   }
   flushInline();
@@ -105,6 +160,8 @@ export const useIncremental = (
   let session: Session | null = null;
   let lastKnownSource = "";
   let tokenCache = new Map<string, TextToken[]>();
+  let nodeIdentityCache = new WeakMap<StructuralNode, TextToken[]>();
+  let offsetTokenCache = { text: "", map: new Map<string, TextToken[]>() };
 
   const currentTree = shallowRef<readonly StructuralNode[]>([]);
 
@@ -124,7 +181,10 @@ export const useIncremental = (
     const { segments, reusedCount } = buildSegments(
       doc.tree,
       doc.source,
-      parser.value,      tokenCache,
+      parser.value,
+      tokenCache,
+      nodeIdentityCache,
+      offsetTokenCache,
     );
     composedState.value = {
       segments,
@@ -148,9 +208,29 @@ export const useIncremental = (
   const initSession = () => {
     const started = performance.now();
     tokenCache = new Map();
+    nodeIdentityCache = new WeakMap();
+    offsetTokenCache = { text: "", map: new Map() };
     session = createIncrementalSession(source.value, makeIncOptions());
     lastKnownSource = source.value;
     updateFromSession("full-init", performance.now() - started);
+  };
+
+  let pendingUpdate: { mode: string; sessionMs: number } | null = null;
+  let rafId = 0;
+
+  const flushPendingUpdate = () => {
+    rafId = 0;
+    if (!pendingUpdate) return;
+    const { mode, sessionMs } = pendingUpdate;
+    pendingUpdate = null;
+    updateFromSession(mode, sessionMs);
+  };
+
+  const scheduleUpdate = (mode: string, sessionMs: number) => {
+    pendingUpdate = { mode, sessionMs };
+    if (!rafId) {
+      rafId = requestAnimationFrame(flushPendingUpdate);
+    }
   };
 
   // Called by editor on doc change with CM ChangeSet
@@ -188,10 +268,10 @@ export const useIncremental = (
         newText: singleInserted,
       };
       const result = session.applyEdit(edit, newSource, incOptions);
-      updateFromSession(result.mode, performance.now() - started);
+      scheduleUpdate(result.mode, performance.now() - started);
     } else {
       session.rebuild(newSource, incOptions);
-      updateFromSession("full-rebuild (multi-change)", performance.now() - started);
+      scheduleUpdate("full-rebuild (multi-change)", performance.now() - started);
     }
   };
 
@@ -218,7 +298,7 @@ export const useIncremental = (
         };
       }
 
-      const tracker = buildPositionTracker(text);
+      const tracker = getCachedTracker(text);
       const started = performance.now();
       const tokens = parseSlice(text, targetNode.position, parser.value, tracker);
       const tagLabel = "tag" in targetNode ? (targetNode as { tag: string }).tag : "";
