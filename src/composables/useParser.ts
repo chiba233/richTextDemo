@@ -5,6 +5,7 @@ import {
   type SyntaxConfig,
   type TagHandler,
   type BlockTagInput,
+  createEasyStableId,
 } from "yume-dsl-rich-text";
 import { createTokenizerFromParser } from "yume-dsl-shiki-highlight";
 
@@ -31,6 +32,7 @@ export const useParser = (
     syntax: demoSyntax,
     depthLimit: 9950,
     implicitInlineShorthand: true,
+    createId: createEasyStableId(),
   }));
 
   const parser = computed(() => createParser(parserOptions.value));

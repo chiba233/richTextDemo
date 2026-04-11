@@ -609,6 +609,69 @@ code {
   overflow: auto;
 }
 
+.preview-mode-tabs {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.preview-mode-tab {
+  border: 1px solid rgba(165, 78, 31, 0.22);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--muted);
+  padding: 6px 12px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    color 0.15s ease,
+    background-color 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.preview-mode-tab-active {
+  color: var(--accent);
+  border-color: rgba(165, 78, 31, 0.35);
+  background: rgba(165, 78, 31, 0.1);
+}
+
+.debug-box {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.86);
+  overflow: auto;
+  white-space: pre;
+  color: #2f241a;
+  font:
+    12px/1.6 "SFMono-Regular",
+    "JetBrains Mono",
+    "Menlo",
+    monospace;
+}
+
+.debug-print {
+  white-space: pre-wrap;
+}
+
+.structural-split {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.structural-pane {
+  margin-top: 0;
+}
+
 .empty-state {
   padding: 16px;
   border: 1px dashed var(--line);

@@ -47,20 +47,6 @@ const getCachedTracker = (text: string) => {
   return cachedTracker;
 };
 
-const logStructuralDebug = (
-  mode: string,
-  sourceText: string,
-  tree: readonly StructuralNode[],
-  parser: Parser,
-) => {
-  if (!import.meta.env.DEV) return;
-  console.groupCollapsed(`[demo][dsl] ${mode}`);
-  console.log("source", sourceText);
-  console.log("structural", tree);
-  console.log("printed", parser.print(tree as StructuralNode[]));
-  console.groupEnd();
-};
-
 const buildSegments = (
   tree: readonly StructuralNode[],
   text: string,
@@ -191,6 +177,9 @@ export const useIncremental = (
     reusedCount: 0,
     incrementalMs: 0,
     incrementalMode: "init",
+    structuralTree: [],
+    richTextTokens: [],
+    printedSource: "",
   });
 
   const updateFromSession = (mode: string, sessionMs: number) => {
@@ -198,7 +187,9 @@ export const useIncremental = (
     const composeStarted = performance.now();
     const doc = session.getDocument();
     currentTree.value = doc.tree;
-    logStructuralDebug(mode, doc.source, doc.tree, parser.value);
+    const structuralTree = doc.tree as StructuralNode[];
+    const richTextTokens = parser.value.parse(doc.source);
+    const printedSource = parser.value.print(structuralTree);
     const { segments, reusedCount } = buildSegments(
       doc.tree,
       doc.source,
@@ -213,6 +204,9 @@ export const useIncremental = (
       reusedCount,
       incrementalMs: sessionMs,
       incrementalMode: mode,
+      structuralTree,
+      richTextTokens,
+      printedSource,
     };
     recomputeSlice();
   };

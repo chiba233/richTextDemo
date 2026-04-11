@@ -39,6 +39,12 @@ export interface TranslationCopy {
   sourceTitle: string;
   previewEyebrow: string;
   previewTitle: string;
+  previewViewResult: string;
+  previewViewStructural: string;
+  previewViewRichText: string;
+  structuralTreeTitle: string;
+  richTextTreeTitle: string;
+  printedSourceTitle: string;
   deepSample: string;
   deepSampleHint: string;
   largeSample: string;
@@ -86,4 +92,7 @@ export interface ComposedState {
   reusedCount: number;
   incrementalMs: number;
   incrementalMode: string;
+  structuralTree: StructuralNode[];
+  richTextTokens: TextToken[];
+  printedSource: string;
 }
