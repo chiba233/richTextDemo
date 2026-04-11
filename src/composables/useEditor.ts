@@ -33,19 +33,19 @@ const buildDecorations = (
   const { from: vpFrom, to: vpTo } = view.viewport;
   const lineFrom = view.state.doc.lineAt(vpFrom).from;
   const lineTo = view.state.doc.lineAt(vpTo).to;
-  const slice = view.state.sliceDoc(lineFrom, lineTo);
-  const tokens = tokenize(slice);
+  const fullText = view.state.doc.toString();
+  const tokens = tokenize(fullText);
   const builder = new RangeSetBuilder<Decoration>();
-  let offset = lineFrom;
+  let offset = 0;
 
   for (const token of tokens) {
     const length = token.content.length;
     const end = offset + length;
-    if (end > lineTo) break;
-    if (length > 0 && token.color) {
+    if (offset >= lineTo) break;
+    if (end > lineFrom && length > 0 && token.color) {
       builder.add(
-        offset,
-        end,
+        Math.max(offset, lineFrom),
+        Math.min(end, lineTo),
         Decoration.mark({ attributes: { style: `color: ${token.color}` } }),
       );
     }
