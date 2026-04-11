@@ -376,6 +376,7 @@ code {
 
 .preview,
 .error-box {
+  white-space: pre-wrap;
   min-height: 0;
   margin: 0;
   padding: 20px;

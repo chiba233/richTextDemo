@@ -11,7 +11,7 @@ const translations: Record<string, TranslationCopy> = {
   zh: {
     heroKicker: "Vue 3 + yume-dsl-rich-text",
     heroTitle: "左边输入 DSL，右边看渲染结果",
-    heroCopy: `这个 demo 基于 \`createParser\` + 事先声明好的 handlers 构建。右侧上方展示 \`parseStructural + nodeAtOffset/enclosingNode + parseSlice\` 的局部重解析——仅凭主 API 就能实现部分增量解析效果。下方则进一步使用实验性增量解析 API \`createIncrementalSession\`，每次编辑只增量更新受影响的区域，拼出最终效果图。此 demo 为纯 AI 生成产物，仅用作展示。`,
+    heroCopy: `这个 demo 基于 \`createParser\` + 事先声明好的 handlers 构建。右侧上方展示 \`parseStructural + nodeAtOffset/enclosingNode + parseSlice\` 的局部重解析——仅凭主 API 就能实现部分增量解析效果。下方则进一步使用实验性增量解析 API \`createIncrementalSession\`，每次编辑只增量更新受影响的区域，拼出最终效果图。此 demo 为纯 AI 生成产物，仅用作展示。如需查看树结构可打开 F12 控制台。`,
     registryEyebrow: "Registry",
     registryTitle: "用户自己声明 handler",
     sourceEyebrow: "Source",
