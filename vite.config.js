@@ -18,4 +18,16 @@ export default defineConfig({
       "@demo": path.resolve(__dirname, "src"),
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes("node_modules/yume-dsl-rich-text/")) return "yume-dsl-rich-text";
+          if (id.includes("node_modules/yume-dsl-token-walker/")) return "yume-dsl-token-walker";
+          if (id.includes("node_modules/yume-dsl-shiki-highlight/")) return "yume-dsl-shiki-highlight";
+          return undefined;
+        },
+      },
+    },
+  },
 });
