@@ -1,4 +1,4 @@
-import type { StructuralNode, TextToken } from "yume-dsl-rich-text";
+import type { StructuralNode, TextToken, TokenDiffResult } from "yume-dsl-rich-text";
 
 export interface LanguageOption {
   key: string;
@@ -42,8 +42,11 @@ export interface TranslationCopy {
   previewViewResult: string;
   previewViewStructural: string;
   previewViewRichText: string;
+  previewViewDiff: string;
   structuralTreeTitle: string;
   richTextTreeTitle: string;
+  diffTitle: string;
+  diffEmpty: string;
   printedSourceTitle: string;
   deepSample: string;
   deepSampleHint: string;
@@ -94,5 +97,6 @@ export interface ComposedState {
   incrementalMode: string;
   structuralTree: StructuralNode[];
   richTextTokens: TextToken[];
+  incrementalDiff: TokenDiffResult | null;
   printedSource: string;
 }

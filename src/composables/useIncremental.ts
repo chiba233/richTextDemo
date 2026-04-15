@@ -5,6 +5,7 @@ import {
   type IncrementalEdit,
   type StructuralNode,
   type TextToken,
+  type TokenDiffResult,
   type TagHandler,
   type BlockTagInput,
   type SyntaxConfig,
@@ -179,10 +180,11 @@ export const useIncremental = (
     incrementalMode: "init",
     structuralTree: [],
     richTextTokens: [],
+    incrementalDiff: null,
     printedSource: "",
   });
 
-  const updateFromSession = (mode: string, sessionMs: number) => {
+  const updateFromSession = (mode: string, sessionMs: number, incrementalDiff: TokenDiffResult | null = null) => {
     if (!session) return;
     const composeStarted = performance.now();
     const doc = session.getDocument();
@@ -206,6 +208,7 @@ export const useIncremental = (
       incrementalMode: mode,
       structuralTree,
       richTextTokens,
+      incrementalDiff,
       printedSource,
     };
     recomputeSlice();
@@ -232,19 +235,19 @@ export const useIncremental = (
     updateFromSession("full-init", performance.now() - started);
   };
 
-  let pendingUpdate: { mode: string; sessionMs: number } | null = null;
+  let pendingUpdate: { mode: string; sessionMs: number; incrementalDiff: TokenDiffResult | null } | null = null;
   let rafId = 0;
 
   const flushPendingUpdate = () => {
     rafId = 0;
     if (!pendingUpdate) return;
-    const { mode, sessionMs } = pendingUpdate;
+    const { mode, sessionMs, incrementalDiff } = pendingUpdate;
     pendingUpdate = null;
-    updateFromSession(mode, sessionMs);
+    updateFromSession(mode, sessionMs, incrementalDiff);
   };
 
-  const scheduleUpdate = (mode: string, sessionMs: number) => {
-    pendingUpdate = { mode, sessionMs };
+  const scheduleUpdate = (mode: string, sessionMs: number, incrementalDiff: TokenDiffResult | null = null) => {
+    pendingUpdate = { mode, sessionMs, incrementalDiff };
     if (!rafId) {
       rafId = requestAnimationFrame(flushPendingUpdate);
     }
@@ -284,11 +287,11 @@ export const useIncremental = (
         oldEndOffset: singleTo,
         newText: singleInserted,
       };
-      const result = session.applyEdit(edit, newSource, incOptions);
-      scheduleUpdate(result.mode, performance.now() - started);
+      const result = session.applyEditWithDiff(edit, newSource, incOptions);
+      scheduleUpdate(result.mode, performance.now() - started, result.diff);
     } else {
       session.rebuild(newSource, incOptions);
-      scheduleUpdate("full-rebuild (multi-change)", performance.now() - started);
+      scheduleUpdate("full-rebuild (multi-change)", performance.now() - started, null);
     }
   };
 

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, toRaw, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, ref, toRaw, watch } from "vue";
 import type { TranslationCopy, SliceResult, ComposedState } from "../types";
 import TokenRenderer from "./TokenRenderer";
 import FormattedText from "./FormattedText";
@@ -14,7 +14,7 @@ const props = defineProps<{
 const lazyRoot = ref<HTMLElement | null>(null);
 const hiddenSegments = ref(new Set<number>());
 const segmentHeights = ref(new Map<number, number>());
-const previewMode = ref<"result" | "structural" | "richText">("result");
+const previewMode = ref<"result" | "structural" | "richText" | "diff">("result");
 let lazyObserver: IntersectionObserver | null = null;
 
 const MAX_SERIALIZE_NODES = 500_000;
@@ -270,6 +270,9 @@ const structuralJson = computed(() =>
 const richTextJson = computed(() =>
   safeStringify(props.composedState.richTextTokens),
 );
+const diffJson = computed(() =>
+  props.composedState.incrementalDiff ? safeStringify(props.composedState.incrementalDiff) : "",
+);
 
 const setupLazyObserver = () => {
   if (lazyObserver) lazyObserver.disconnect();
@@ -300,12 +303,26 @@ const setupLazyObserver = () => {
 };
 
 watch(
-  () => props.composedState.segments,
-  async () => {
+  [() => props.composedState.segments, previewMode],
+  async ([, mode]) => {
+    if (mode !== "result") {
+      if (lazyObserver) {
+        lazyObserver.disconnect();
+        lazyObserver = null;
+      }
+      return;
+    }
     await nextTick();
     setupLazyObserver();
   },
 );
+
+onBeforeUnmount(() => {
+  if (lazyObserver) {
+    lazyObserver.disconnect();
+    lazyObserver = null;
+  }
+});
 
 defineExpose({
   setupLazyObserver,
@@ -346,6 +363,14 @@ defineExpose({
           @click="previewMode = 'richText'"
         >
           {{ copy.previewViewRichText }}
+        </button>
+        <button
+          type="button"
+          class="preview-mode-tab"
+          :class="{ 'preview-mode-tab-active': previewMode === 'diff' }"
+          @click="previewMode = 'diff'"
+        >
+          {{ copy.previewViewDiff }}
         </button>
       </div>
     </header>
@@ -429,12 +454,24 @@ defineExpose({
         </div>
       </template>
 
-      <template v-else>
+      <template v-else-if="previewMode === 'richText'">
         <section class="slice-preview-block preview-section preview-section-large">
           <div class="slice-preview-head">
             <h3>{{ copy.richTextTreeTitle }}</h3>
           </div>
           <pre class="debug-box">{{ richTextJson }}</pre>
+        </section>
+      </template>
+
+      <template v-else>
+        <section class="slice-preview-block preview-section preview-section-large">
+          <div class="slice-preview-head">
+            <h3>{{ copy.diffTitle }}</h3>
+          </div>
+          <pre v-if="composedState.incrementalDiff" class="debug-box">{{ diffJson }}</pre>
+          <div v-else class="empty-state">
+            {{ copy.diffEmpty }}
+          </div>
         </section>
       </template>
     </div>
