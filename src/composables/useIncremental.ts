@@ -235,22 +235,11 @@ export const useIncremental = (
     updateFromSession("full-init", performance.now() - started);
   };
 
-  let pendingUpdate: { mode: string; sessionMs: number; incrementalDiff: TokenDiffResult | null } | null = null;
-  let rafId = 0;
-
-  const flushPendingUpdate = () => {
-    rafId = 0;
-    if (!pendingUpdate) return;
-    const { mode, sessionMs, incrementalDiff } = pendingUpdate;
-    pendingUpdate = null;
-    updateFromSession(mode, sessionMs, incrementalDiff);
-  };
-
+  // Keep incremental diff/mode aligned with the exact edit that just advanced
+  // the session. RAF-coalescing can overwrite an earlier non-empty diff with a
+  // later no-op edit in the same frame.
   const scheduleUpdate = (mode: string, sessionMs: number, incrementalDiff: TokenDiffResult | null = null) => {
-    pendingUpdate = { mode, sessionMs, incrementalDiff };
-    if (!rafId) {
-      rafId = requestAnimationFrame(flushPendingUpdate);
-    }
+    updateFromSession(mode, sessionMs, incrementalDiff);
   };
 
   // Called by editor on doc change with CM ChangeSet
