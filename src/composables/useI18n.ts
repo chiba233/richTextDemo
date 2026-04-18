@@ -9,7 +9,7 @@ export const languages: readonly LanguageOption[] = [
 
 const translations: Record<string, TranslationCopy> = {
   zh: {
-    heroKicker: "Vue 3 + yume-dsl-rich-text",
+    heroKicker: "Vue 3 +",
     heroTitle: "左边输入 DSL，右边看渲染结果",
     heroCopy: `这个 demo 基于 \`createParser\` + 事先声明好的 handlers 构建。右侧上方展示 \`parseStructural + nodeAtOffset/enclosingNode + parseSlice\` 的局部重解析——仅凭主 API 就能实现部分增量解析效果。下方则进一步使用实验性增量解析 API \`createIncrementalSession\`，每次编辑只增量更新受影响的区域，拼出最终效果图。此 demo 为纯 AI 生成产物，仅用作展示。`,
     registryEyebrow: "Registry",
@@ -85,7 +85,7 @@ console.log(message);
 %`,
   },
   en: {
-    heroKicker: "Vue 3 + yume-dsl-rich-text",
+    heroKicker: "Vue 3 +",
     heroTitle: "Type DSL on the left, see the result on the right",
     heroCopy:
       "This demo is built on `createParser` plus predeclared handlers. The upper-right panel shows local reparsing via `parseStructural + nodeAtOffset/enclosingNode + parseSlice` — the main API alone can achieve partial incremental parsing. The lower-right panel goes further with the experimental incremental API `createIncrementalSession`, which only updates affected regions on each edit to produce the final composed preview. This demo is fully AI-generated and is for demonstration purposes only.",
@@ -165,7 +165,7 @@ console.log(message);
 %`,
   },
   ja: {
-    heroKicker: "Vue 3 + yume-dsl-rich-text",
+    heroKicker: "Vue 3 +",
     heroTitle: "左で DSL を入力し、右で結果を確認",
     heroCopy:
       "このデモは `createParser` と事前宣言した handlers をベースにしています。右上には `parseStructural + nodeAtOffset/enclosingNode + parseSlice` による部分再解析を表示——メイン API だけでも部分的な増量解析効果が得られます。右下ではさらに実験的な増量解析 API `createIncrementalSession` を使用し、各編集は影響を受ける領域のみを更新して最終プレビューを合成します。このデモは純粋に AI が生成したもので、展示用途のみです。",

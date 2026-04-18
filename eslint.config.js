@@ -10,7 +10,10 @@ export default [
   ...pluginVue.configs["flat/recommended"],
   {
     languageOptions: {
-      globals: { ...globals.browser },
+      globals: {
+        ...globals.browser,
+        __YUME_DEMO_PACKAGE_VERSIONS__: "readonly",
+      },
     },
   },
   {

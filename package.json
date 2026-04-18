@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host",
+    "local-dev": "VITE_USE_LOCAL_RICH_TEXT=1 VITE_USE_LOCAL_TOKEN_WALKER=1 VITE_USE_LOCAL_SHIKI_HIGHLIGHT=1 vite --host",
     "build": "vite build",
     "preview": "vite preview",
     "lint": "eslint src && vue-tsc --noEmit",

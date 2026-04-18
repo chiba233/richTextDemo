@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from "vue";
 import type { TranslationCopy, LanguageOption } from "../types";
 import FormattedText from "./FormattedText";
 
@@ -11,12 +12,21 @@ defineProps<{
 const emit = defineEmits<{
   "update:currentLang": [lang: string];
 }>();
+
+const packageVersionKicker = computed(() => {
+  const versions = __YUME_DEMO_PACKAGE_VERSIONS__;
+  return [
+    `yume-dsl-rich-text@${versions["yume-dsl-rich-text"]}`,
+    `yume-dsl-token-walker@${versions["yume-dsl-token-walker"]}`,
+    `yume-dsl-shiki-highlight@${versions["yume-dsl-shiki-highlight"]}`,
+  ].join(" + ");
+});
 </script>
 
 <template>
   <section class="hero">
     <div class="hero-topline">
-      <p class="hero-kicker">{{ copy.heroKicker }}</p>
+      <p class="hero-kicker">{{ copy.heroKicker }} {{ packageVersionKicker }}</p>
       <div class="language-switch">
         <button
           v-for="item in languages"
