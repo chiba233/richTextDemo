@@ -48,10 +48,19 @@ const getCachedTracker = (text: string) => {
   return cachedTracker;
 };
 
+const isWholeDocumentSpan = (
+  position: StructuralNode["position"] | undefined,
+  textLength: number,
+): boolean =>
+  !!position &&
+  position.start.offset === 0 &&
+  position.end.offset === textLength;
+
 const buildSegments = (
   tree: readonly StructuralNode[],
   text: string,
   parser: Parser,
+  fullTokens: TextToken[],
   contentCache: Map<string, TextToken[]>,
   identityCache: WeakMap<StructuralNode, TextToken[]>,
   offsetCache: { text: string; map: Map<string, TextToken[]> },
@@ -96,7 +105,9 @@ const buildSegments = (
       const rawValue = (node as { type: "text"; value: string }).value;
       const trimmed = rawValue.replace(/^\r?\n/, "");
       if (trimmed === "") continue;
-      const tokens = parseSlice(text, position, parser, tracker);
+      const tokens = isWholeDocumentSpan(position, text.length)
+        ? fullTokens
+        : parseSlice(text, position, parser, tracker, tree as StructuralNode[]);
       if (inlineSrcFrom < 0) inlineSrcFrom = position.start.offset;
       inlineSrcTo = position.end.offset;
       inlineBuf.push(...tokens);
@@ -124,7 +135,9 @@ const buildSegments = (
         if (tokens) {
           reused++;
         } else {
-          tokens = parseSlice(text, position, parser, tracker);
+          tokens = isWholeDocumentSpan(position, text.length)
+            ? fullTokens
+            : parseSlice(text, position, parser, tracker, tree as StructuralNode[]);
           contentCache.set(cacheKey, tokens);
         }
         identityCache.set(node, tokens);
@@ -196,6 +209,7 @@ export const useIncremental = (
       doc.tree,
       doc.source,
       parser.value,
+      richTextTokens,
       tokenCache,
       nodeIdentityCache,
       offsetTokenCache,
@@ -317,7 +331,9 @@ export const useIncremental = (
 
       const tracker = getCachedTracker(text);
       const started = performance.now();
-      const tokens = parseSlice(text, targetNode.position, parser.value, tracker);
+      const tokens = isWholeDocumentSpan(targetNode.position, text.length)
+        ? composedState.value.richTextTokens
+        : parseSlice(text, targetNode.position, parser.value, tracker, tree);
       const tagLabel = "tag" in targetNode ? (targetNode as { tag: string }).tag : "";
       sliceState.value = {
         error: "",
