@@ -181,7 +181,8 @@ export const useRegistry = (
 
   const activeBlockTags = computed(() => {
     const tags: BlockTagInput[] = [];
-    if (enabledTags.value.includes("warn")) tags.push("warn");
+    if (enabledTags.value.includes("warn"))
+      tags.push({ tag: "warn", forms: ["block", "inline"] });
     if (enabledTags.value.includes("code"))
       tags.push({ tag: "code", forms: ["raw" as TagForm] });
     return declareMultilineTags(tags);
