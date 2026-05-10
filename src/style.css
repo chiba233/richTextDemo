@@ -707,7 +707,35 @@ code {
 }
 
 .lazy-segment {
+  position: relative;
   min-height: 1em;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  padding: 2px 4px;
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease;
+}
+
+.lazy-segment-incremental {
+  background: rgba(148, 163, 184, 0.08);
+  border-color: rgba(148, 163, 184, 0.34);
+}
+
+.lazy-segment-badge {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  z-index: 1;
+  border: 1px solid rgba(148, 163, 184, 0.42);
+  border-radius: 3px;
+  background: rgba(15, 23, 42, 0.86);
+  color: rgba(226, 232, 240, 0.88);
+  padding: 1px 5px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.4;
+  pointer-events: none;
 }
 
 .lazy-placeholder {

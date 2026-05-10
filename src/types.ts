@@ -87,6 +87,7 @@ export interface Segment {
   tokens: TextToken[];
   srcFrom: number;
   srcTo: number;
+  isIncrementalRange: boolean;
 }
 
 export interface ComposedState {
@@ -98,5 +99,6 @@ export interface ComposedState {
   structuralTree: StructuralNode[];
   richTextTokens: TextToken[];
   incrementalDiff: TokenDiffResult | null;
+  incrementalRange: { startOffset: number; endOffset: number } | null;
   printedSource: string;
 }

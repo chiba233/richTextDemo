@@ -424,12 +424,14 @@ defineExpose({
               :key="seg.key"
               :data-seg-idx="idx"
               class="lazy-segment"
+              :class="{ 'lazy-segment-incremental': seg.isIncrementalRange }"
               :style="
                 hiddenSegments.has(idx)
                   ? { minHeight: (segmentHeights.get(idx) || 0) + 'px' }
                   : undefined
               "
             >
+              <span v-if="seg.isIncrementalRange" class="lazy-segment-badge">incremental</span>
               <TokenRenderer v-if="!hiddenSegments.has(idx)" :tokens="seg.tokens" />
             </div>
           </div>

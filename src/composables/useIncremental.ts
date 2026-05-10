@@ -2,7 +2,10 @@ import { shallowRef, watch, type Ref, type ComputedRef } from "vue";
 import {
   createIncrementalSession,
   buildPositionTracker,
+  createIncrementalDirtyRange,
   type IncrementalEdit,
+  type DirtyRangeTester,
+  type SourceOffsetRange,
   type StructuralNode,
   type TextToken,
   type TokenDiffResult,
@@ -39,17 +42,75 @@ const isWholeDocumentSpan = (
 const buildSegments = (
   fullTokens: TextToken[],
   textLength: number,
+  dirtyRange: SourceOffsetRange | null,
+  touchesDirtyRange: DirtyRangeTester,
 ): { segments: Segment[]; reusedCount: number } => {
+  if (!dirtyRange) {
+    return {
+      segments: [
+        {
+          key: `all-0-${textLength}`,
+          tokens: fullTokens,
+          srcFrom: 0,
+          srcTo: textLength,
+          isIncrementalRange: false,
+        },
+      ],
+      reusedCount: 0,
+    };
+  }
+
+  const intersects = (token: TextToken): boolean => {
+    const position = token.position;
+    if (!position) return true;
+    return touchesDirtyRange({
+      startOffset: position.start.offset,
+      endOffset: position.end.offset,
+    });
+  };
+
+  const tokenStart = (token: TextToken): number => token.position?.start.offset ?? 0;
+  const tokenEnd = (token: TextToken): number => token.position?.end.offset ?? textLength;
+  const segments: Segment[] = [];
+  let pendingTokens: TextToken[] = [];
+  let pendingDirty = false;
+  let pendingStart = 0;
+  let pendingEnd = 0;
+
+  const flush = () => {
+    if (pendingTokens.length === 0) return;
+    segments.push({
+      key: `${pendingDirty ? "inc" : "reuse"}-${pendingStart}-${pendingEnd}-${segments.length}`,
+      tokens: pendingTokens,
+      srcFrom: pendingStart,
+      srcTo: pendingEnd,
+      isIncrementalRange: pendingDirty,
+    });
+    pendingTokens = [];
+  };
+
+  for (const token of fullTokens) {
+    const dirty = intersects(token);
+    const start = tokenStart(token);
+    const end = tokenEnd(token);
+    if (pendingTokens.length > 0 && dirty !== pendingDirty) {
+      flush();
+    }
+    if (pendingTokens.length === 0) {
+      pendingDirty = dirty;
+      pendingStart = start;
+      pendingEnd = end;
+    } else {
+      pendingEnd = end;
+    }
+    pendingTokens.push(token);
+  }
+
+  flush();
+
   return {
-    segments: [
-      {
-        key: `all-0-${textLength}`,
-        tokens: fullTokens,
-        srcFrom: 0,
-        srcTo: textLength,
-      },
-    ],
-    reusedCount: 0,
+    segments,
+    reusedCount: segments.filter((segment) => !segment.isIncrementalRange).length,
   };
 };
 
@@ -81,6 +142,7 @@ export const useIncremental = (
     structuralTree: [],
     richTextTokens: [],
     incrementalDiff: null,
+    incrementalRange: null,
     printedSource: "",
   });
 
@@ -92,7 +154,14 @@ export const useIncremental = (
     const structuralTree = doc.tree as StructuralNode[];
     const richTextTokens = parser.value.parse(doc.source, { trackPositions: true });
     const printedSource = parser.value.print(structuralTree);
-    const { segments, reusedCount } = buildSegments(richTextTokens, doc.source.length);
+    const { getRange, touches } = createIncrementalDirtyRange(incrementalDiff);
+    const dirtyRange = getRange();
+    const { segments, reusedCount } = buildSegments(
+      richTextTokens,
+      doc.source.length,
+      dirtyRange,
+      touches,
+    );
     composedState.value = {
       segments,
       composeMs: performance.now() - composeStarted,
@@ -102,6 +171,7 @@ export const useIncremental = (
       structuralTree,
       richTextTokens,
       incrementalDiff,
+      incrementalRange: dirtyRange,
       printedSource,
     };
     recomputeSlice();
