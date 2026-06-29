@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { ref } from "vue";
 import type { TranslationCopy, CompletionTemplate } from "../types";
+import { useGlow } from "../composables/useGlow";
 
 defineProps<{
   copy: TranslationCopy;
-  panelHeight: number;
   caretOffset: number;
   sliceTargetLabel: string;
   sliceRangeLabel: string;
@@ -29,41 +29,42 @@ const emit = defineEmits<{
 const editorRoot = ref<HTMLElement | null>(null);
 const completionPanel = ref<HTMLElement | null>(null);
 
+const glow = useGlow();
+
 defineExpose({ editorRoot, completionPanel });
 </script>
 
 <template>
-  <article
-    class="panel source-panel"
-    :style="{ height: `${panelHeight}px`, maxHeight: `${panelHeight}px` }"
-  >
+  <article class="panel glass source-panel" v-on="glow">
     <header class="panel-head">
-      <p class="eyebrow">{{ copy.sourceEyebrow }}</p>
-      <h2>{{ copy.sourceTitle }}</h2>
+      <div class="panel-head-main">
+        <p class="eyebrow">{{ copy.sourceEyebrow }}</p>
+        <h2>{{ copy.sourceTitle }}</h2>
+      </div>
+      <div class="source-tools">
+        <button
+          type="button"
+          class="mini-action"
+          :title="copy.deepSampleHint"
+          @click="emit('loadDeep')"
+        >
+          {{ copy.deepSample }}
+        </button>
+        <button
+          type="button"
+          class="mini-action"
+          :title="copy.largeSampleHint"
+          @click="emit('loadLarge')"
+        >
+          {{ copy.largeSample }}
+        </button>
+        <button type="button" class="mini-action" @click="emit('insertRandom')">
+          {{ copy.randomInsert }}
+        </button>
+      </div>
     </header>
     <div class="panel-body source-body">
       <div class="source-meta">
-        <div class="source-tools">
-          <button
-            type="button"
-            class="mini-action"
-            :title="copy.deepSampleHint"
-            @click="emit('loadDeep')"
-          >
-            {{ copy.deepSample }}
-          </button>
-          <button
-            type="button"
-            class="mini-action"
-            :title="copy.largeSampleHint"
-            @click="emit('loadLarge')"
-          >
-            {{ copy.largeSample }}
-          </button>
-          <button type="button" class="mini-action" @click="emit('insertRandom')">
-            {{ copy.randomInsert }}
-          </button>
-        </div>
         <div class="slice-meta">
           <span class="meta-chip">{{ copy.caret }}: {{ caretOffset }}</span>
           <span class="meta-chip">{{ copy.hit }}: {{ sliceTargetLabel }}</span>

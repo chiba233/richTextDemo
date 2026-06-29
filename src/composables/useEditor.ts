@@ -314,8 +314,8 @@ export const useEditor = (
     EditorView.theme({
       "&": {
         height: "100%",
-        backgroundColor: "#171311",
-        color: "#f7f1e8",
+        backgroundColor: "transparent",
+        color: "var(--ink)",
       },
       ".cm-scroller": {
         overflow: "auto",
@@ -326,17 +326,17 @@ export const useEditor = (
       ".cm-content, .cm-gutter": { minHeight: "100%" },
       ".cm-content": {
         padding: "18px 0",
-        caretColor: "#fff4de",
+        caretColor: "var(--accent)",
         fontKerning: "none",
         fontVariantLigatures: "none",
         fontFeatureSettings: '"liga" 0, "calt" 0',
       },
       ".cm-line": { padding: "0 18px" },
-      ".cm-cursor, .cm-dropCursor": { borderLeftColor: "#fff4de" },
+      ".cm-cursor, .cm-dropCursor": { borderLeftColor: "var(--accent)" },
       ".cm-selectionBackground, ::selection": {
-        backgroundColor: "rgba(255, 214, 102, 0.22) !important",
+        backgroundColor: "rgba(var(--accent-rgb), 0.18) !important",
       },
-      ".cm-activeLine": { backgroundColor: "rgba(255,255,255,0.02)" },
+      ".cm-activeLine": { backgroundColor: "rgba(var(--accent-rgb), 0.05)" },
       ".cm-gutters": { display: "none" },
       ".cm-focused": { outline: "none" },
     }),

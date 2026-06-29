@@ -39,6 +39,7 @@ export interface TranslationCopy {
   sourceTitle: string;
   previewEyebrow: string;
   previewTitle: string;
+  inspect: string;
   previewViewResult: string;
   previewViewStructural: string;
   previewViewRichText: string;

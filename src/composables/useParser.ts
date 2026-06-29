@@ -37,17 +37,19 @@ export const useParser = (
 
   const parser = computed(() => createParser(parserOptions.value));
 
+  // Syntax palette tuned for the light frosted-glass editor surface — deep,
+  // saturated tones that stay legible on a near-white background.
   const tokenizer = computed(() =>
     createTokenizerFromParser(parserOptions.value, {
-      punct: "#ffd166",
-      tagName: "#ff6b6b",
-      bracket: "#f4a261",
-      operator: "#e9c46a",
-      separator: "#4cc9f0",
-      end: "#80ed99",
-      escape: "#c77dff",
-      argText: "#fff1db",
-      contentText: "#f8f9fa",
+      punct: "#b32d6b",
+      tagName: "#c1432f",
+      bracket: "#b06a18",
+      operator: "#9a6d00",
+      separator: "#0e7490",
+      end: "#2f8a4e",
+      escape: "#7c4dcf",
+      argText: "#6d5577",
+      contentText: "#3a2e25",
     }),
   );
 
