@@ -110,8 +110,9 @@ code {
 .topbar {
   position: fixed;
   top: 8px;
-  left: 50%;
-  transform: translateX(-50%);
+  left: 0;
+  right: 0;
+  margin-inline: auto;
   z-index: 20;
   width: min(1240px, calc(100vw - 16px));
   display: flex;
@@ -205,9 +206,11 @@ code {
 .tag-dock {
   position: fixed;
   bottom: 8px;
-  left: 50%;
-  transform: translateX(-50%);
+  left: 0;
+  right: 0;
+  margin-inline: auto;
   z-index: 20;
+  width: fit-content;
   max-width: calc(100vw - 16px);
   display: flex;
   align-items: center;
@@ -1438,22 +1441,22 @@ code {
 @keyframes dropIn {
   from {
     opacity: 0;
-    transform: translate(-50%, -22px);
+    transform: translateY(-14px);
   }
   to {
     opacity: 1;
-    transform: translateX(-50%);
+    transform: none;
   }
 }
 
 @keyframes dockUp {
   from {
     opacity: 0;
-    transform: translate(-50%, 24px);
+    transform: translateY(16px);
   }
   to {
     opacity: 1;
-    transform: translateX(-50%);
+    transform: none;
   }
 }
 
