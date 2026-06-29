@@ -124,7 +124,7 @@ console.log(message);
     composeLabel: "Compose",
     incrementalLabel: "Incremental",
     incrementalModeLabel: "Inc. mode",
-    reusedLabel: "Reused segments",
+    reusedLabel: "Reused",
     sliceTitle: "Local reparse (parseSlice)",
     sliceCopy:
       "Locate the current node by caret offset, then reparse only that source span with `parseSlice(...)`.",
@@ -249,13 +249,31 @@ console.log(message);
   },
 };
 
+// Pick the initial language from the browser, defaulting to English for anything
+// outside the three supported locales.
+const detectLang = (): string => {
+  if (typeof navigator === "undefined") return "en";
+  const lang = (navigator.language || "en").toLowerCase();
+  if (lang.startsWith("zh")) return "zh";
+  if (lang.startsWith("ja")) return "ja";
+  if (lang.startsWith("en")) return "en";
+  return "en";
+};
+
 export const useI18n = () => {
-  const currentLang = ref("zh");
+  const currentLang = ref(detectLang());
   const copy = computed(() => translations[currentLang.value]);
-  const source = ref(translations.zh.sampleSource);
+  const source = ref(translations[currentLang.value].sampleSource);
+
+  if (typeof document !== "undefined") {
+    document.documentElement.lang = currentLang.value;
+  }
 
   watch(currentLang, (lang) => {
     source.value = translations[lang].sampleSource;
+    if (typeof document !== "undefined") {
+      document.documentElement.lang = lang;
+    }
   });
 
   return { currentLang, copy, source };

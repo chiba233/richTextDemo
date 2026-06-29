@@ -6,6 +6,7 @@ import { useParser } from "./composables/useParser";
 import { useIncremental } from "./composables/useIncremental";
 import { useEditor } from "./composables/useEditor";
 import { useTheme } from "./composables/useTheme";
+import { isDark } from "./composables/useColorScheme";
 import {
   createDeepNestedSample,
   createLargeSample,
@@ -126,6 +127,13 @@ watch(
   },
   { deep: true },
 );
+
+// Color-scheme flip → remount so the editor picks up the dark/light syntax palette
+watch(isDark, async () => {
+  await nextTick();
+  bindEditorRefs();
+  remountPreservingSelection();
+});
 </script>
 
 <template>

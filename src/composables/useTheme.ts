@@ -53,17 +53,11 @@ export const themePresets: ThemePreset[] = [
   },
 ];
 
-const STORAGE_KEY = "yumedsl-demo-theme";
+// A different preset on every refresh — picked at module load.
+const randomThemeKey = (): string =>
+  themePresets[Math.floor(Math.random() * themePresets.length)].key;
 
-const readStored = (): string => {
-  try {
-    return localStorage.getItem(STORAGE_KEY) ?? "sakura";
-  } catch {
-    return "sakura";
-  }
-};
-
-export const activeTheme = ref(readStored());
+export const activeTheme = ref(randomThemeKey());
 
 const apply = (key: string): void => {
   if (typeof document === "undefined") return;
@@ -77,11 +71,6 @@ const apply = (key: string): void => {
 
 export const setTheme = (key: string): void => {
   activeTheme.value = key;
-  try {
-    localStorage.setItem(STORAGE_KEY, key);
-  } catch {
-    /* ignore storage failures */
-  }
   apply(key);
 };
 

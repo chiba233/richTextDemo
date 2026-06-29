@@ -114,7 +114,7 @@ code {
   right: 0;
   margin-inline: auto;
   z-index: 20;
-  width: min(1240px, calc(100vw - 16px));
+  width: min(1500px, calc(100vw - 16px));
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -134,11 +134,11 @@ code {
   z-index: 1;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 76px 16px 84px;
+  padding: 76px 16px 76px;
 }
 
 .stage {
-  max-width: 1240px;
+  max-width: 1500px;
   margin: 0 auto;
   animation: stageIn 0.65s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
 }
@@ -198,7 +198,7 @@ code {
 
 .stage-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.18fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 18px;
 }
 
@@ -668,9 +668,9 @@ code {
 .panel {
   display: flex;
   flex-direction: column;
-  min-height: 420px;
-  /* Bounded to the viewport so tall content scrolls inside the card
-     instead of stretching it open. */
+  /* Tall enough that the result section stays usable even on short/flat windows
+     (the page scrolls); bounded above so tall content scrolls inside the card. */
+  min-height: 600px;
   height: calc(100dvh - 150px);
   max-height: 1080px;
 }
@@ -942,7 +942,7 @@ code {
 }
 
 .metric-chip-value-text {
-  color: var(--ink);
+  color: var(--accent-ink);
   font-size: 12px;
   font-weight: 700;
 }
@@ -1631,5 +1631,75 @@ code {
 
   .structural-split {
     grid-template-rows: minmax(120px, 1fr) minmax(120px, 1fr);
+  }
+}
+
+/* ── Dark mode ─────────────────────────────────────────────────── */
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --ink: #ece3ea;
+    --muted: #9c8b97;
+    --line: rgba(255, 255, 255, 0.1);
+    --glass: rgba(38, 30, 40, 0.55);
+    --glass-strong: rgba(45, 37, 48, 0.78);
+    --glass-line: rgba(255, 255, 255, 0.12);
+    --shadow: 0 18px 50px rgba(0, 0, 0, 0.5);
+    --chrome-shadow: 0 10px 34px rgba(0, 0, 0, 0.55);
+    --accent-ink: color-mix(in srgb, rgb(var(--accent-rgb)) 78%, #ffffff);
+    --accent-soft: rgba(var(--accent-rgb), 0.2);
+    --accent-line: rgba(var(--accent-rgb), 0.42);
+    --link: #74c6da;
+    --warn-bg: rgba(120, 90, 30, 0.3);
+    --warn-border: #c99a3a;
+    background: linear-gradient(160deg, #1c171f 0%, #1a1620 50%, #17131c 100%);
+  }
+
+  .aurora-bg::before,
+  .aurora-bg::after {
+    opacity: 0.3;
+  }
+
+  .panel-head {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent);
+  }
+
+  .intro-links a,
+  .lang-button,
+  .topbar-menu-btn,
+  .meta-chip,
+  .metric-chip,
+  .compare-card,
+  .preview-mode-tab,
+  .empty-state,
+  .lang-card,
+  .theme-card,
+  .inspect-close,
+  .debug-box,
+  .demo-code,
+  .demo-code-body,
+  .tag-toggle {
+    background: rgba(255, 255, 255, 0.06);
+  }
+
+  .editor-stack {
+    background: rgba(255, 255, 255, 0.04);
+  }
+
+  .editor-root .cm-tooltip,
+  .editor-completion-panel {
+    background: rgba(42, 34, 44, 0.96);
+  }
+
+  .error-box {
+    color: #ffa3a3;
+    background: rgba(214, 91, 91, 0.16);
+    border-color: rgba(214, 91, 91, 0.3);
+  }
+
+  .demo-warn-meta-chip {
+    background: rgba(224, 168, 58, 0.18);
+    color: #e8c073;
   }
 }
